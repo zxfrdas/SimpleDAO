@@ -39,6 +39,7 @@ public class DAOProcessor extends AbstractProcessor {
 
 	@Override
 	public void init(ProcessingEnvironment env) {
+		super.init(env);
 		filer = env.getFiler();
 		indexItemMap = new HashMap<Integer, ColumnItem>();
 	}
@@ -85,7 +86,8 @@ public class DAOProcessor extends AbstractProcessor {
 				Column c = element2.getAnnotation(Column.class);
 				ColumnItem column = new ColumnItem();
 				column.index = c.index();
-				column.name = c.name();
+				column.name = (null != c.name() && !c.name().isEmpty()) ? c.name()
+						: element2.getSimpleName().toString();
 				column.type = c.type();
 				column.primary = c.primary();
 				if (column.primary) {
@@ -94,7 +96,7 @@ public class DAOProcessor extends AbstractProcessor {
 				indexItemMap.put(column.index, column);
 				proxyContent.append("	public static final String ")
 						.append(element2.getSimpleName()).append(" = ").append("\"")
-						.append(c.name()).append("\";\n");
+						.append(column.name).append("\";\n");
 			}
 		}
 
