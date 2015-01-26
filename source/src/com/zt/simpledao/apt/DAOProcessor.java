@@ -80,12 +80,13 @@ public class DAOProcessor extends AbstractProcessor {
 		} else {
 			primaryKeys.clear();
 		}
+		indexItemMap.clear();
 		int index = 0;
 		for (Element element2 : element.getEnclosedElements()) {
 			if (element2.getKind().isField()) {
 				Column c = element2.getAnnotation(Column.class);
 				ColumnItem column = new ColumnItem();
-				column.index = index;//c.index();
+				column.index = index;
 				column.fieldName = element2.getSimpleName().toString();
 				column.columnName = (null != c.name() && !c.name().isEmpty()) ? c
 						.name() : column.fieldName;
