@@ -20,8 +20,8 @@ import javax.tools.JavaFileObject;
 
 import com.zt.simpledao.Column;
 import com.zt.simpledao.Database;
-import com.zt.simpledao.SQLDataType;
 import com.zt.simpledao.Table;
+import com.zt.simpledao.bean.ColumnItem;
 
 @SupportedAnnotationTypes(value = { "*" })
 @SupportedSourceVersion(SourceVersion.RELEASE_6)
@@ -30,18 +30,11 @@ public class DAOProcessor extends AbstractProcessor {
 	private List<ColumnItem> primaryKeys;
 	private Map<Integer, ColumnItem> indexItemMap;
 
-	private static class ColumnItem {
-		public int index;
-		public String name;
-		public SQLDataType type;
-		public boolean primary;
-	}
-
 	@Override
 	public void init(ProcessingEnvironment env) {
-		super.init(env);
 		filer = env.getFiler();
 		indexItemMap = new HashMap<Integer, ColumnItem>();
+		super.init(env);
 	}
 
 	@Override
@@ -69,26 +62,34 @@ public class DAOProcessor extends AbstractProcessor {
 	private void createBeanProxy(String autoAPTPackageName, String proxyClassName,
 			Element element) {
 		StringBuilder proxyContent = new StringBuilder();
+		// package
 		proxyContent.append("package ").append(autoAPTPackageName).append(";\n");
+		// import
+		proxyContent.append("\nimport ").append("android.util.SparseArray;\n");
 		proxyContent.append("\nimport ").append(element.toString()).append(";\n");
-		proxyContent.append("\nimport com.zt.simpledao.bean.IBeanProxy;\n");
+		proxyContent.append("import com.zt.simpledao.bean.ColumnItem;\n");
+		proxyContent.append("import com.zt.simpledao.bean.IBeanProxy;\n");
+		proxyContent.append("import com.zt.simpledao.SQLDataType;\n");
+		// class
 		proxyContent.append("\npublic class ").append(proxyClassName)
 				.append(" implements IBeanProxy {\n");
 		proxyContent.append("	// ").append(element.toString()).append("\n");
-		
+		// field column
 		if (null == primaryKeys) {
-			primaryKeys = new ArrayList<DAOProcessor.ColumnItem>();
+			primaryKeys = new ArrayList<ColumnItem>();
 		} else {
 			primaryKeys.clear();
 		}
+		int index = 0;
 		for (Element element2 : element.getEnclosedElements()) {
 			if (element2.getKind().isField()) {
 				Column c = element2.getAnnotation(Column.class);
 				ColumnItem column = new ColumnItem();
-				column.index = c.index();
-				column.name = (null != c.name() && !c.name().isEmpty()) ? c.name()
-						: element2.getSimpleName().toString();
-				column.type = c.type();
+				column.index = index;//c.index();
+				column.fieldName = element2.getSimpleName().toString();
+				column.columnName = (null != c.name() && !c.name().isEmpty()) ? c
+						.name() : column.fieldName;
+				column.sqlType = c.type();
 				column.primary = c.primary();
 				if (column.primary) {
 					primaryKeys.add(column);
@@ -96,28 +97,52 @@ public class DAOProcessor extends AbstractProcessor {
 				indexItemMap.put(column.index, column);
 				proxyContent.append("	public static final String ")
 						.append(element2.getSimpleName()).append(" = ").append("\"")
-						.append(column.name).append("\";\n");
+						.append(column.columnName).append("\";\n");
+				index++;
 			}
 		}
-
+		// field database
 		Database db = element.getAnnotation(Database.class);
 		proxyContent.append("	private static final String DATABASE_NAME = ")
 				.append("\"").append(db.name()).append("\"").append(";\n");
 		proxyContent.append("	private static final int VERSION = ")
 				.append(db.version()).append(";\n");
-
+		// field table
 		Table t = element.getAnnotation(Table.class);
 		proxyContent.append("	private static final String TABLE = ").append("\"")
 				.append(t.name()).append("\"").append(";\n");
-
 		proxyContent.append("	private static final String TABLE_CREATOR = ")
 				.append("\"").append(crateTable(t.name())).append("\"")
 				.append(";\n");
-
-		appendIPropMethod(proxyContent, element.getSimpleName().toString());
-
+		// field column map
+		proxyContent
+				.append("	private static final SparseArray<ColumnItem> ALL_COLUMNS = new SparseArray<ColumnItem>(")
+				.append(indexItemMap.size()).append(");\n");
+		// fill column map
+		proxyContent.append("	static {\n").append("		Class<")
+				.append(element.getSimpleName().toString()).append("> claz = ")
+				.append(element.getSimpleName().toString()).append(".class;\n");
+		proxyContent.append("		try {\n");
+		final Set<Integer> keySet = indexItemMap.keySet();
+		for (Integer key : keySet) {
+			ColumnItem value = indexItemMap.get(key);
+			proxyContent.append("			ColumnItem item").append(key)
+					.append(" = new ColumnItem(").append(key).append(", \"")
+					.append(value.fieldName).append("\", ").append("SQLDataType.")
+					.append(value.sqlType.toString()).append(", ")
+					.append(value.primary).append(", ")
+					.append("claz.getDeclaredField(\"").append(value.fieldName)
+					.append("\"));\n");
+			proxyContent.append("			ALL_COLUMNS.put(").append(key).append(", item")
+					.append(key).append(");\n");
+		}
+		proxyContent.append("		} catch (NoSuchFieldException e) {\n")
+				.append("			e.printStackTrace();\n").append("		}\n").append("	}\n");
+		// method
+		appendMethods(proxyContent, element.getSimpleName().toString());
+		// class end
 		proxyContent.append("\n}");
-
+		// write file
 		JavaFileObject file = null;
 		try {
 			file = filer.createSourceFile(autoAPTPackageName + "/" + proxyClassName,
@@ -136,7 +161,7 @@ public class DAOProcessor extends AbstractProcessor {
 		// 转换为了按Column中声明的index顺序构造sql语句。
 		for (int i = 0; i < total; i++) {
 			ColumnItem item = indexItemMap.get(i);
-			sb.append(item.name).append(" ").append(item.type.toString());
+			sb.append(item.columnName).append(" ").append(item.sqlType.toString());
 			if (item.index == (total - 1)) {
 				// 创建最后一列
 				if (!primaryKeys.isEmpty()) {
@@ -145,7 +170,7 @@ public class DAOProcessor extends AbstractProcessor {
 					final int primaryTotal = primaryKeys.size();
 					for (int pri = 0; pri < primaryTotal; pri ++) {
 						ColumnItem primary = primaryKeys.get(pri);
-						sb.append(primary.name);
+						sb.append(primary.columnName);
 						if (pri != (primaryTotal - 1)) {
 							// 非最后一个
 							sb.append(",");
@@ -161,7 +186,7 @@ public class DAOProcessor extends AbstractProcessor {
 		return sb.toString();
 	}
 
-	private void appendIPropMethod(StringBuilder sb, String className) {
+	private void appendMethods(StringBuilder sb, String className) {
 		sb.append("\n	@Override\n");
 		sb.append("	public String getDataBaseName() {\n").append(
 				"		return DATABASE_NAME;\n	}\n");
@@ -181,6 +206,10 @@ public class DAOProcessor extends AbstractProcessor {
 		sb.append("\n	@Override\n");
 		sb.append("	public Class<?> getBeanClass() {\n").append("		return ")
 				.append(className).append(".class;\n	}\n");
+		
+		sb.append("\n	@Override\n");
+		sb.append("	public SparseArray<ColumnItem> getAllColumns() {\n")
+				.append("		return ALL_COLUMNS").append(";\n	}\n");
 	}
 
 	private void createDAO(String autoAPTPackageName, String daoClassName,
