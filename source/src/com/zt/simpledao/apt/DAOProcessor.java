@@ -99,6 +99,9 @@ public class DAOProcessor extends AbstractProcessor {
 				proxyContent.append("	public static final String ")
 						.append(element2.getSimpleName()).append(" = ").append("\"")
 						.append(column.columnName).append("\";\n");
+				proxyContent.append("	public static final int ")
+						.append(element2.getSimpleName()).append("_id")
+						.append(" = ").append(index).append(";\n");
 				index++;
 			}
 		}
