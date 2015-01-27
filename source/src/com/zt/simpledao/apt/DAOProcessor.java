@@ -1,6 +1,7 @@
 package com.zt.simpledao.apt;
 
 import java.io.IOException;
+import java.io.Writer;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -16,6 +17,7 @@ import javax.annotation.processing.SupportedSourceVersion;
 import javax.lang.model.SourceVersion;
 import javax.lang.model.element.Element;
 import javax.lang.model.element.TypeElement;
+import javax.tools.Diagnostic.Kind;
 import javax.tools.JavaFileObject;
 
 import com.zt.simpledao.Column;
@@ -23,8 +25,9 @@ import com.zt.simpledao.Database;
 import com.zt.simpledao.Table;
 import com.zt.simpledao.bean.ColumnItem;
 
-@SupportedAnnotationTypes(value = { "*" })
 @SupportedSourceVersion(SourceVersion.RELEASE_6)
+@SupportedAnnotationTypes(value = { "com.zt.simpledao.Column",
+		"com.zt.simpledao.Database", "com.zt.simpledao.Table" })
 public class DAOProcessor extends AbstractProcessor {
 	private Filer filer;
 	private List<ColumnItem> primaryKeys;
@@ -37,24 +40,22 @@ public class DAOProcessor extends AbstractProcessor {
 		super.init(env);
 	}
 
+	@SuppressWarnings("unchecked")
 	@Override
 	public boolean process(Set<? extends TypeElement> annotations,
 			RoundEnvironment roundEnv) {
-		for (Element element : roundEnv.getRootElements()) {
-			String packageName = element.toString().substring(0,
-					element.toString().lastIndexOf("."));
+		Set<TypeElement> dbfiles = (Set<TypeElement>) roundEnv
+				.getElementsAnnotatedWith(Database.class);
+		for (TypeElement dbfile : dbfiles) {
+			// init database file path
+			String packageName = dbfile.toString().substring(0,
+					dbfile.toString().lastIndexOf("."));
 			String autoAPTPackageName = packageName + ".auto";
-			String proxyClassName = element.getSimpleName() + "Proxy";
-
-			if (element.toString().contains(autoAPTPackageName)) {
-				// 不要循环为已经生成的类生成新的类
-				continue;
-			}
-
-			createBeanProxy(autoAPTPackageName, proxyClassName, element);
-
-			String daoClassName = element.getSimpleName() + "DAO";
-			createDAO(autoAPTPackageName, daoClassName, proxyClassName, element);
+			String proxyClassName = dbfile.getSimpleName() + "Proxy";
+			// create file
+			createBeanProxy(autoAPTPackageName, proxyClassName, dbfile);
+			String daoClassName = dbfile.getSimpleName() + "DAO";
+			createDAO(autoAPTPackageName, daoClassName, proxyClassName, dbfile);
 		}
 		return true;
 	}
@@ -85,6 +86,10 @@ public class DAOProcessor extends AbstractProcessor {
 		for (Element element2 : element.getEnclosedElements()) {
 			if (element2.getKind().isField()) {
 				Column c = element2.getAnnotation(Column.class);
+				if (null == c) {
+					error("database must have @Column!", element);
+					return;
+				}
 				ColumnItem column = new ColumnItem();
 				column.index = index;
 				column.fieldName = element2.getSimpleName().toString();
@@ -113,6 +118,10 @@ public class DAOProcessor extends AbstractProcessor {
 				.append(db.version()).append(";\n");
 		// field table
 		Table t = element.getAnnotation(Table.class);
+		if (null == t) {
+			error("database must have @Table!", element);
+			return;
+		}
 		proxyContent.append("	private static final String TABLE = ").append("\"")
 				.append(t.name()).append("\"").append(";\n");
 		proxyContent.append("	private static final String TABLE_CREATOR = ")
@@ -148,12 +157,21 @@ public class DAOProcessor extends AbstractProcessor {
 		proxyContent.append("\n}");
 		// write file
 		JavaFileObject file = null;
+		Writer writer = null;
 		try {
 			file = filer.createSourceFile(autoAPTPackageName + "/" + proxyClassName,
 					element);
-			file.openWriter().append(proxyContent).close();
+			if (null != file) {
+				writer = file.openWriter();
+				writer.append(proxyContent).flush();
+			}
 		} catch (IOException e) {
-			e.printStackTrace();
+		} finally {
+			if (null != writer) {
+				try {
+					writer.close();
+				} catch (IOException e) {}
+			}
 		}
 	}
 
@@ -267,6 +285,15 @@ public class DAOProcessor extends AbstractProcessor {
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
+	}
+
+	@Override
+	public SourceVersion getSupportedSourceVersion() {
+		return super.getSupportedSourceVersion();
+	}
+	
+	private void error(String msg, Element e) {
+		processingEnv.getMessager().printMessage(Kind.ERROR, msg, e);
 	}
 
 }
