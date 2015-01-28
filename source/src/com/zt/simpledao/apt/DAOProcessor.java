@@ -91,7 +91,7 @@ public class DAOProcessor extends AbstractProcessor {
 					return;
 				}
 				ColumnItem column = new ColumnItem();
-				column.index = index;
+				column.index = (-1 == c.index()) ? index : c.index();
 				column.fieldName = element2.getSimpleName().toString();
 				column.columnName = (null != c.name() && !c.name().isEmpty()) ? c
 						.name() : column.fieldName;
@@ -106,7 +106,7 @@ public class DAOProcessor extends AbstractProcessor {
 						.append(column.columnName).append("\";\n");
 				proxyContent.append("	public static final int ")
 						.append(element2.getSimpleName()).append("_id")
-						.append(" = ").append(index).append(";\n");
+						.append(" = ").append(column.index).append(";\n");
 				index++;
 			}
 		}

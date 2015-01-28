@@ -5,10 +5,11 @@ import java.util.List;
 
 import com.zt.simpledao.condition.Condition;
 import com.zt.simpledao.condition.IConditionBuilder;
+import com.zt.simpledao.condition.IOrderby;
+import com.zt.simpledao.condition.IWhere;
 
 @SuppressWarnings("unchecked")
 public class SQLiteConditionBuilder implements IConditionBuilder {
-
 	private static final String PLACE_HOLDER_NUMBER = "? ";
 	private static final String AND = "AND ";
 	private List<Where> mWheres;
@@ -23,85 +24,19 @@ public class SQLiteConditionBuilder implements IConditionBuilder {
 	}
 	
 	@Override
-	public IConditionBuilder where(String column) {
-		where = new Where();
+	public IWhere where(String column) {
+		where = new Where(this);
 		where.column = column;
-		return this;
+		return where;
 	}
-
+	
 	@Override
-	public <E> IConditionBuilder less(E arg) {
-		if (null == where) throw new NullPointerException();
-		where.condition = Where.EnumCondition.LESS;
-		putArg(arg);
-		return this;
-	}
-
-	@Override
-	public <E> IConditionBuilder lessEqual(E arg) {
-		if (null == where) throw new NullPointerException();
-		where.condition = Where.EnumCondition.LESS_EQUAL;
-		putArg(arg);
-		return this;
-	}
-
-	@Override
-	public <E> IConditionBuilder equal(E arg) {
-		if (null == where) throw new NullPointerException();
-		where.condition = Where.EnumCondition.EQUAL;
-		putArg(arg);
-		return this;
-	}
-
-	@Override
-	public <E> IConditionBuilder notEqual(E arg) {
-		if (null == where) throw new NullPointerException();
-		where.condition = Where.EnumCondition.NOT_EQUAL;
-		putArg(arg);
-		return this;
-	}
-
-	@Override
-	public <E> IConditionBuilder moreEqual(E arg) {
-		if (null == where) throw new NullPointerException();
-		where.condition = Where.EnumCondition.MORE_EQUAL;
-		putArg(arg);
-		return this;
-	}
-
-	@Override
-	public <E> IConditionBuilder more(E arg) {
-		if (null == where) throw new NullPointerException();
-		where.condition = Where.EnumCondition.MORE;
-		putArg(arg);
-		return this;
-	}
-
-	@Override
-	public <E> IConditionBuilder between(E min, E max) {
-		if (null == where) throw new NullPointerException();
-		where.condition = Where.EnumCondition.BETWEEN;
-		putArg(min, max);
-		return this;
-	}
-
-	@Override
-	public <E> IConditionBuilder like(E pattern) {
-		if (null == where) throw new NullPointerException();
-		where.condition = Where.EnumCondition.LIKE;
-		putArg(pattern);
-		return this;
-	}
-
-	@Override
-	public IConditionBuilder orderby(String column, boolean asc) {
-		Orderby orderby = new Orderby();
+	public IOrderby orderby(String column) {
+		Orderby orderby = new Orderby(this);
 		orderby.column = column;
-		orderby.asc = asc;
 		mOrderbys.add(orderby);
-		return this;
+		return orderby;
 	}
-
 	
 	@Override
 	public IConditionBuilder groupby(String column) {
@@ -118,6 +53,17 @@ public class SQLiteConditionBuilder implements IConditionBuilder {
 		}
 		return this;
 	}
+	
+	@Override
+	public Condition sql(String selection, String[] selectionArgs,
+			String orderby, String groupby) {
+		Condition condition = new Condition();
+		condition.setSelection(selection);
+		condition.setSelectionArgs(selectionArgs);
+		condition.setOrderBy(orderby);
+		condition.setGroupby(groupby);
+		return condition;
+	}
 
 	@Override
 	public Condition buildDone() {
@@ -127,19 +73,8 @@ public class SQLiteConditionBuilder implements IConditionBuilder {
 		condition.setSelectionArgs(createSelectionArgs());
 		condition.setOrderBy(createOrderby());
 		condition.setGroupby(createGroupby());
+		clear();
 		return condition;
-	}
-	
-	private <T> void putArg(T... args) {
-		if (args[0] instanceof String) {
-			where.argType = Where.EnumArgType.TEXT;
-		} else {
-			where.argType = Where.EnumArgType.NUMBER;
-		}
-		where.args = new ArrayList<String>();
-		for (T arg : args) {
-			where.args.add(arg.toString());
-		}
 	}
 	
 	private String createSelection() {
@@ -219,7 +154,21 @@ public class SQLiteConditionBuilder implements IConditionBuilder {
 		return result;
 	}
 	
-	private static class Where {
+	private void clear() {
+		where = null;
+		if (null != mWheres) {
+			mWheres.clear();
+		}
+		if (null != mGroupbys) {
+			mGroupbys.clear();
+		}
+		if (null != mOrderbys) {
+			mOrderbys.clear();
+		}
+	}
+	
+	private static class Where implements IWhere {
+		private IConditionBuilder builder;
 		private String column;
 		private EnumCondition condition;
 		private List<String> args;
@@ -246,14 +195,107 @@ public class SQLiteConditionBuilder implements IConditionBuilder {
 			}
 		}
 		
+		public Where(IConditionBuilder builder) {
+			this.builder = builder;
+		}
+
+		@Override
+		public <E> IConditionBuilder less(E arg) {
+			condition = Where.EnumCondition.LESS;
+			putArg(arg);
+			return builder;
+		}
+
+		@Override
+		public <E> IConditionBuilder lessEqual(E arg) {
+			condition = Where.EnumCondition.LESS_EQUAL;
+			putArg(arg);
+			return builder;
+		}
+
+		@Override
+		public <E> IConditionBuilder equal(E arg) {
+			condition = Where.EnumCondition.EQUAL;
+			putArg(arg);
+			return builder;
+		}
+
+		@Override
+		public <E> IConditionBuilder notEqual(E arg) {
+			condition = Where.EnumCondition.NOT_EQUAL;
+			putArg(arg);
+			return builder;
+		}
+
+		@Override
+		public <E> IConditionBuilder moreEqual(E arg) {
+			condition = Where.EnumCondition.MORE_EQUAL;
+			putArg(arg);
+			return builder;
+		}
+
+		@Override
+		public <E> IConditionBuilder more(E arg) {
+			condition = Where.EnumCondition.MORE;
+			putArg(arg);
+			return builder;
+		}
+
+		@Override
+		public <E> IConditionBuilder between(E min, E max) {
+			if (!min.getClass().equals(max.getClass())) {
+				throw new IllegalArgumentException("between args need same class");
+			}
+			condition = Where.EnumCondition.BETWEEN;
+			putArg(min, max);
+			return builder;
+		}
+
+		@Override
+		public <E> IConditionBuilder like(E pattern) {
+			condition = Where.EnumCondition.LIKE;
+			putArg(pattern);
+			return builder;
+		}
+		
+		private <T> void putArg(T... args) {
+			if (args[0] instanceof String) {
+				argType = Where.EnumArgType.TEXT;
+			} else {
+				argType = Where.EnumArgType.NUMBER;
+			}
+			this.args = new ArrayList<String>();
+			for (T arg : args) {
+				this.args.add(arg.toString());
+			}
+		}
+		
 	}
 	
-	private static class Orderby {
+	private class Orderby implements IOrderby {
+		private IConditionBuilder builder;
 		private String column;
 		private boolean asc;
+		
+		public Orderby(IConditionBuilder builder) {
+			this.builder = builder;
+		}
+		
+		@Override
+		public IConditionBuilder ascend() {
+			this.asc = true;
+			return builder;
+		}
+		
+		@Override
+		public IConditionBuilder descend() {
+			asc = false;
+			return builder;
+		}
 	}
 
 	private static class Groupby {
 		private String column;
 	}
+
 }

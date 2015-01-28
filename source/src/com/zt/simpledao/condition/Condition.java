@@ -1,5 +1,8 @@
 package com.zt.simpledao.condition;
 
+/**
+ * SQL条件语句
+ */
 public class Condition {
 	
 	private String selection;
@@ -51,6 +54,7 @@ public class Condition {
 			sb.append("args = ").append(arg).append(" ");
 		}
 		sb.append(", orderby = ").append(orderBy);
+		sb.append(", groupby = ").append(groupby);
 		return sb.toString();
 	}
 	

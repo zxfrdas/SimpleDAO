@@ -11,15 +11,6 @@ import com.zt.simpledao.condition.Condition;
 import com.zt.simpledao.condition.IConditionBuilder;
 
 public interface IDAO<T> {
-
-	/**
-	 * 数据库单个插入操作。
-	 * 
-	 * @param valuesList
-	 *            试图插入的ContentValues列表
-	 * @return 成功返回{@code true}，反之{@code false}
-	 */
-	boolean insert(List<ContentValues> valuesList);
 	
 	/**
 	 * 数据库单个插入操作。
@@ -38,6 +29,15 @@ public interface IDAO<T> {
 	 * @return 成功返回{@code true}，反之{@code false}
 	 */
 	boolean insert(Collection<T> items);
+	
+	/**
+	 * 数据库多条插入操作。
+	 * 
+	 * @param values
+	 *            试图插入的ContentValues列表
+	 * @return 成功返回{@code true}，反之{@code false}
+	 */
+	boolean insert(List<ContentValues> values);
 
 	/**
 	 * 数据库删除操作。
@@ -94,15 +94,6 @@ public interface IDAO<T> {
 	 * @return 成功返回{@code true}，反之{@code false}
 	 */
 	boolean update(Map<T, Condition> updates);
-
-	/**
-	 * 数据库查询操作
-	 * 
-	 * @param sql
-	 *            需要执行的sql语句
-	 * @return 所有符合条件的数据类
-	 */
-	Cursor query(String sql, String[] selectionArgs);
 	
 	/**
 	 * 数据库查询操作
@@ -112,6 +103,15 @@ public interface IDAO<T> {
 	 * @return 所有符合条件的数据类
 	 */
 	List<T> query(Condition condition);
+	
+	/**
+	 * 数据库查询操作
+	 * 
+	 * @param sql
+	 *            需要执行的sql语句
+	 * @return 所有符合条件的数据类
+	 */
+	Cursor query(String sql, String[] selectionArgs);
 	
 	/**
 	 * 数据库查询操作
