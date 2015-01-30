@@ -59,11 +59,20 @@ public class SQLiteConditionBuilderTest {
 		assertEquals("a BETWEEN ? AND ? ", condition.getSelection());
 		assertEquals("1", condition.getSelectionArgs()[0]);
 		assertEquals("10", condition.getSelectionArgs()[1]);
+		// all
+		condition = builder.where("a").notEqual("b").and().where("c").between(1, 10)
+				.and().where("d").like("%d").buildDone();
+		assertEquals("a <> ? AND c BETWEEN ? AND ? AND d LIKE ? ", condition.getSelection());
+		assertEquals("b", condition.getSelectionArgs()[0]);
+		assertEquals("1", condition.getSelectionArgs()[1]);
+		assertEquals("10", condition.getSelectionArgs()[2]);
+		assertEquals("%d", condition.getSelectionArgs()[3]);
 	}
 
 	@Test
 	public void testOrderby() {
-		fail("尚未实现");
+		condition = builder.orderby("a").ascend().orderby("b").descend().buildDone();
+		assertEquals("a ASC, b DESC", condition.getOrderBy());
 	}
 
 	@Test

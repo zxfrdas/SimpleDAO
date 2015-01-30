@@ -141,7 +141,7 @@ public class DAOProcessor extends AbstractProcessor {
 			ColumnItem value = indexItemMap.get(key);
 			proxyContent.append("			ColumnItem item").append(key)
 					.append(" = new ColumnItem(").append(key).append(", \"")
-					.append(value.fieldName).append("\", ").append("SQLDataType.")
+					.append(value.columnName).append("\", ").append("SQLDataType.")
 					.append(value.sqlType.toString()).append(", ")
 					.append(value.primary).append(", ")
 					.append("claz.getDeclaredField(\"").append(value.fieldName)
