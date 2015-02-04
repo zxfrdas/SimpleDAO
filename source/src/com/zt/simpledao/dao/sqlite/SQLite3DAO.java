@@ -32,9 +32,9 @@ public abstract class SQLite3DAO<T> implements IDAO<T> {
 	private final WriteLock mWriteLock;
 	private SQLiteDatabase mDatabase;
 	private String tableName;
-	private IBeanProxy mProxy;
+	private IBeanProxy<T> mProxy;
 
-	public SQLite3DAO(Context context, IBeanProxy proxy) {
+	public SQLite3DAO(Context context, IBeanProxy<T> proxy) {
 		mProxy = proxy;
 		tableName = mProxy.getTableName();
 		final ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
@@ -56,7 +56,7 @@ public abstract class SQLite3DAO<T> implements IDAO<T> {
 	}
 
 	protected abstract void onUpgrade(SQLiteDatabase db, int oldVersion,
-			int newVersion, IBeanProxy proxy);
+			int newVersion, IBeanProxy<T> proxy);
 
 	@Override
 	public boolean insert(List<ContentValues> valuesList) {
@@ -84,8 +84,7 @@ public abstract class SQLite3DAO<T> implements IDAO<T> {
 	@Override
 	public boolean insert(T item) {
 		long ret = -1;
-		ContentValues values = setColumnToContentValue(mProxy.getAllColumns(),
-				item);
+		ContentValues values = mProxy.convertBeanToDatabase(item);
 		mWriteLock.lock();
 		try {
 			ret = mDatabase.insert(tableName, null, values);
@@ -105,8 +104,7 @@ public abstract class SQLite3DAO<T> implements IDAO<T> {
 		long ret = -1;
 		ArrayList<ContentValues> values = new ArrayList<ContentValues>();
 		for (T item : items) {
-			ContentValues value = setColumnToContentValue(
-					mProxy.getAllColumns(), item);
+			ContentValues value = mProxy.convertBeanToDatabase(item);
 			values.add(value);
 		}
 		mWriteLock.lock();
@@ -190,8 +188,7 @@ public abstract class SQLite3DAO<T> implements IDAO<T> {
 	@Override
 	public boolean update(T item, Condition condition) {
 		long ret = -1;
-		ContentValues value = setColumnToContentValue(mProxy.getAllColumns(),
-				item);
+		ContentValues value = mProxy.convertBeanToDatabase(item);
 		mWriteLock.lock();
 		try {
 			ret = mDatabase.update(tableName, value, condition.getSelection(),
@@ -212,8 +209,7 @@ public abstract class SQLite3DAO<T> implements IDAO<T> {
 		long ret = -1;
 		ArrayList<ContentValues> values = new ArrayList<ContentValues>();
 		for (T item : items) {
-			ContentValues value = setColumnToContentValue(
-					mProxy.getAllColumns(), item);
+			ContentValues value = mProxy.convertBeanToDatabase(item);
 			values.add(value);
 		}
 		mWriteLock.lock();
@@ -242,8 +238,7 @@ public abstract class SQLite3DAO<T> implements IDAO<T> {
 		long ret = -1;
 		Map<ContentValues, Condition> values = new HashMap<ContentValues, Condition>();
 		for (Entry<T, Condition> update : updates.entrySet()) {
-			ContentValues value = setColumnToContentValue(
-					mProxy.getAllColumns(), update.getKey());
+			ContentValues value = mProxy.convertBeanToDatabase(update.getKey());
 			values.put(value, update.getValue());
 		}
 		mWriteLock.lock();
@@ -390,64 +385,13 @@ public abstract class SQLite3DAO<T> implements IDAO<T> {
 		return new SQLiteConditionBuilder();
 	}
 
-	private ContentValues setColumnToContentValue(SparseArray<ColumnItem> items,
-			T bean) {
-		ContentValues values = new ContentValues();
-		final int size = items.size();
-		for (int i = 0; i < size; i++) {
-			ColumnItem item = items.get(i);
-			final String name = item.columnName;
-			final SQLDataType type = item.sqlType;
-			final Field field = item.field;
-			final Class<?> fieldType = field.getType();
-			field.setAccessible(true);
-			try {
-				if (SQLDataType.BLOB == type) {
-					values.put(name, (byte[]) field.get(bean));
-				} else if (SQLDataType.INTEGER == type) {
-					if (boolean.class.equals(fieldType)
-							|| Boolean.class.equals(fieldType)) {
-						values.put(name, field.getBoolean(bean) ? 1 : 0);
-					} else if (int.class.equals(fieldType)
-							|| Integer.class.equals(fieldType)) {
-						values.put(name, field.getInt(bean));
-					} else if (long.class.equals(fieldType)
-							|| Long.class.equals(fieldType)) {
-						values.put(name, field.getLong(bean));
-					} else if (short.class.equals(fieldType)
-							|| Short.class.equals(fieldType)) {
-						values.put(name, field.getShort(bean));
-					}
-				} else if (SQLDataType.REAL == type) {
-					if (float.class.equals(fieldType)
-							|| Float.class.equals(fieldType)) {
-						values.put(name, field.getFloat(bean));
-					} else if (double.class.equals(fieldType)
-							|| Double.class.equals(fieldType)) {
-						values.put(name, field.getDouble(bean));
-					}
-				} else if (SQLDataType.TEXT == type) {
-					values.put(name, String.valueOf(field.get(bean)));
-				} else if (SQLDataType.NULL == type) {
-					values.putNull(name);
-				}
-			} catch (IllegalAccessException e) {
-				e.printStackTrace();
-			} catch (IllegalArgumentException e) {
-				e.printStackTrace();
-			}
-		}
-		return values;
-	}
-
-	@SuppressWarnings("unchecked")
 	private List<T> setCursorValueToBean(Cursor cursor, SparseArray<ColumnItem> items)
 			throws IllegalAccessException, IllegalArgumentException {
 		List<T> beans = new ArrayList<T>();
 		while (null != cursor && cursor.moveToNext()) {
 			T item = null;
 			try {
-				item = (T) mProxy.getBeanClass().newInstance();
+				item = mProxy.getBeanClass().newInstance();
 			} catch (InstantiationException e) {
 				e.printStackTrace();
 			}

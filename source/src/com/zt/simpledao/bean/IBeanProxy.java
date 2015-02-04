@@ -1,12 +1,14 @@
 package com.zt.simpledao.bean;
 
+import android.content.ContentValues;
 import android.util.SparseArray;
 
-public interface IBeanProxy {
+public interface IBeanProxy<T> {
 	String getDataBaseName();
 	int getDataBaseVersion();
 	String getTableName();
 	String getTableCreator();
-	Class<?> getBeanClass();
+	Class<T> getBeanClass();
 	SparseArray<ColumnItem> getAllColumns();
+	ContentValues convertBeanToDatabase(T bean);
 }

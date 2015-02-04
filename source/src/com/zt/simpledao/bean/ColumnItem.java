@@ -2,6 +2,8 @@ package com.zt.simpledao.bean;
 
 import java.lang.reflect.Field;
 
+import javax.lang.model.type.TypeKind;
+
 import com.zt.simpledao.SQLDataType;
 
 public class ColumnItem {
@@ -11,6 +13,7 @@ public class ColumnItem {
 	public SQLDataType sqlType;
 	public boolean primary;
 	public Field field;
+	public TypeKind typeKind;
 	
 	public ColumnItem() {};
 

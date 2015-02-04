@@ -3,6 +3,7 @@ package com.zt.simpledao.apt;
 import java.io.IOException;
 import java.io.Writer;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -17,11 +18,13 @@ import javax.annotation.processing.SupportedSourceVersion;
 import javax.lang.model.SourceVersion;
 import javax.lang.model.element.Element;
 import javax.lang.model.element.TypeElement;
+import javax.lang.model.type.TypeKind;
 import javax.tools.Diagnostic.Kind;
 import javax.tools.JavaFileObject;
 
 import com.zt.simpledao.Column;
 import com.zt.simpledao.Database;
+import com.zt.simpledao.SQLDataType;
 import com.zt.simpledao.Table;
 import com.zt.simpledao.bean.ColumnItem;
 
@@ -63,19 +66,76 @@ public class DAOProcessor extends AbstractProcessor {
 	private void createBeanProxy(String autoAPTPackageName, String proxyClassName,
 			Element element) {
 		StringBuilder proxyContent = new StringBuilder();
-		// package
-		proxyContent.append("package ").append(autoAPTPackageName).append(";\n");
-		// import
-		proxyContent.append("\nimport ").append("android.util.SparseArray;\n");
-		proxyContent.append("\nimport ").append(element.toString()).append(";\n");
-		proxyContent.append("import com.zt.simpledao.bean.ColumnItem;\n");
-		proxyContent.append("import com.zt.simpledao.bean.IBeanProxy;\n");
-		proxyContent.append("import com.zt.simpledao.SQLDataType;\n");
-		// class
-		proxyContent.append("\npublic class ").append(proxyClassName)
-				.append(" implements IBeanProxy {\n");
-		proxyContent.append("	// ").append(element.toString()).append("\n");
-		// field column
+		appendBeanProxyPackage(autoAPTPackageName, proxyContent);
+		appendBeanProxyImport(element, proxyContent);
+		appendBeanProxyClassStart(proxyClassName, element, proxyContent);
+		appendBeanProxyColumnConst(element, proxyContent);
+		// field database
+		Database db = element.getAnnotation(Database.class);
+		proxyContent.append("	private static final String DATABASE_NAME = ")
+				.append("\"").append(db.name()).append("\"").append(";\n");
+		proxyContent.append("	private static final int VERSION = ")
+				.append(db.version()).append(";\n");
+		// field table
+		Table t = element.getAnnotation(Table.class);
+		if (null == t) {
+			error("database must have @Table!", element);
+			return;
+		}
+		proxyContent.append("	private static final String TABLE = ").append("\"")
+				.append(t.name()).append("\"").append(";\n");
+		proxyContent.append("	private static final String TABLE_CREATOR = ")
+				.append("\"").append(crateTable(t.name())).append("\"")
+				.append(";\n");
+		
+		appendBeanProxyColumnMap(element, proxyContent);
+		// method
+		appendMethods(proxyContent, element.getSimpleName().toString());
+		// class end
+		proxyContent.append("\n}");
+		// write file
+		JavaFileObject file = null;
+		Writer writer = null;
+		try {
+			file = filer.createSourceFile(autoAPTPackageName + "/" + proxyClassName,
+					element);
+			if (null != file) {
+				writer = file.openWriter();
+				writer.append(proxyContent).flush();
+			}
+		} catch (IOException e) {
+		} finally {
+			if (null != writer) {
+				try {
+					writer.close();
+				} catch (IOException e) {}
+			}
+		}
+	}
+	
+	private void appendBeanProxyPackage(String autoAPTPackageName,
+			StringBuilder content) {
+		content.append("package ").append(autoAPTPackageName).append(";\n");
+	}
+	
+	private void appendBeanProxyImport(Element element, StringBuilder content) {
+		content.append("\nimport ").append("android.content.ContentValues;\n");
+		content.append("\nimport ").append("android.util.SparseArray;\n");
+		content.append("\nimport ").append(element.toString()).append(";\n");
+		content.append("import com.zt.simpledao.bean.ColumnItem;\n");
+		content.append("import com.zt.simpledao.bean.IBeanProxy;\n");
+		content.append("import com.zt.simpledao.SQLDataType;\n");
+	}
+	
+	private void appendBeanProxyClassStart(String proxyClassName, Element element,
+			StringBuilder content) {
+		content.append("\npublic class ").append(proxyClassName)
+				.append(" implements IBeanProxy").append("<")
+				.append(element.getSimpleName()).append(">").append(" {\n");
+		content.append("	// ").append(element.toString()).append("\n");
+	}
+	
+	private void appendBeanProxyColumnConst(Element element, StringBuilder content) {
 		if (null == primaryKeys) {
 			primaryKeys = new ArrayList<ColumnItem>();
 		} else {
@@ -100,81 +160,19 @@ public class DAOProcessor extends AbstractProcessor {
 				if (column.primary) {
 					primaryKeys.add(column);
 				}
+				column.typeKind = element2.asType().getKind();
 				indexItemMap.put(column.index, column);
-				proxyContent.append("	public static final String ")
+				content.append("	public static final String ")
 						.append(element2.getSimpleName()).append(" = ").append("\"")
 						.append(column.columnName).append("\";\n");
-				proxyContent.append("	public static final int ")
+				content.append("	public static final int ")
 						.append(element2.getSimpleName()).append("_id")
 						.append(" = ").append(column.index).append(";\n");
 				index++;
 			}
 		}
-		// field database
-		Database db = element.getAnnotation(Database.class);
-		proxyContent.append("	private static final String DATABASE_NAME = ")
-				.append("\"").append(db.name()).append("\"").append(";\n");
-		proxyContent.append("	private static final int VERSION = ")
-				.append(db.version()).append(";\n");
-		// field table
-		Table t = element.getAnnotation(Table.class);
-		if (null == t) {
-			error("database must have @Table!", element);
-			return;
-		}
-		proxyContent.append("	private static final String TABLE = ").append("\"")
-				.append(t.name()).append("\"").append(";\n");
-		proxyContent.append("	private static final String TABLE_CREATOR = ")
-				.append("\"").append(crateTable(t.name())).append("\"")
-				.append(";\n");
-		// field column map
-		proxyContent
-				.append("	private static final SparseArray<ColumnItem> ALL_COLUMNS = new SparseArray<ColumnItem>(")
-				.append(indexItemMap.size()).append(");\n");
-		// fill column map
-		proxyContent.append("	static {\n").append("		Class<")
-				.append(element.getSimpleName().toString()).append("> claz = ")
-				.append(element.getSimpleName().toString()).append(".class;\n");
-		proxyContent.append("		try {\n");
-		final Set<Integer> keySet = indexItemMap.keySet();
-		for (Integer key : keySet) {
-			ColumnItem value = indexItemMap.get(key);
-			proxyContent.append("			ColumnItem item").append(key)
-					.append(" = new ColumnItem(").append(key).append(", \"")
-					.append(value.columnName).append("\", ").append("SQLDataType.")
-					.append(value.sqlType.toString()).append(", ")
-					.append(value.primary).append(", ")
-					.append("claz.getDeclaredField(\"").append(value.fieldName)
-					.append("\"));\n");
-			proxyContent.append("			ALL_COLUMNS.put(").append(key).append(", item")
-					.append(key).append(");\n");
-		}
-		proxyContent.append("		} catch (NoSuchFieldException e) {\n")
-				.append("			e.printStackTrace();\n").append("		}\n").append("	}\n");
-		// method
-		appendMethods(proxyContent, element.getSimpleName().toString());
-		// class end
-		proxyContent.append("\n}");
-		// write file
-		JavaFileObject file = null;
-		Writer writer = null;
-		try {
-			file = filer.createSourceFile(autoAPTPackageName + "/" + proxyClassName,
-					element);
-			if (null != file) {
-				writer = file.openWriter();
-				writer.append(proxyContent).flush();
-			}
-		} catch (IOException e) {
-		} finally {
-			if (null != writer) {
-				try {
-					writer.close();
-				} catch (IOException e) {}
-			}
-		}
 	}
-
+	
 	private String crateTable(String table) {
 		// Create table xxx (column type, column type, primary key (column));
 		StringBuilder sb = new StringBuilder();
@@ -207,6 +205,34 @@ public class DAOProcessor extends AbstractProcessor {
 		}
 		return sb.toString();
 	}
+	
+	private void appendBeanProxyColumnMap(Element element, StringBuilder content) {
+		// field column map
+		content.append(
+				"	private static final SparseArray<ColumnItem> ALL_COLUMNS = new SparseArray<ColumnItem>(")
+				.append(indexItemMap.size()).append(");\n");
+		// fill column map
+		content.append("	static {\n").append("		Class<")
+				.append(element.getSimpleName().toString()).append("> claz = ")
+				.append(element.getSimpleName().toString()).append(".class;\n");
+		content.append("		try {\n");
+		final Set<Integer> keySet = indexItemMap.keySet();
+		for (Integer key : keySet) {
+			ColumnItem value = indexItemMap.get(key);
+			content.append("			ColumnItem item").append(key)
+					.append(" = new ColumnItem(").append(key).append(", \"")
+					.append(value.columnName).append("\", ").append("SQLDataType.")
+					.append(value.sqlType.toString()).append(", ")
+					.append(value.primary).append(", ")
+					.append("claz.getDeclaredField(\"").append(value.fieldName)
+					.append("\"));\n");
+			content.append("			ALL_COLUMNS.put(").append(key).append(", item")
+					.append(key).append(");\n");
+		}
+		content.append("		} catch (NoSuchFieldException e) {\n")
+				.append("			e.printStackTrace();\n").append("		}\n")
+				.append("	}\n");
+	}
 
 	private void appendMethods(StringBuilder sb, String className) {
 		sb.append("\n	@Override\n");
@@ -226,12 +252,50 @@ public class DAOProcessor extends AbstractProcessor {
 				"		return TABLE_CREATOR;\n	}\n");
 
 		sb.append("\n	@Override\n");
-		sb.append("	public Class<?> getBeanClass() {\n").append("		return ")
+		sb.append("	public Class").append("<").append(className)
+				.append("> getBeanClass() {\n").append("		return ")
 				.append(className).append(".class;\n	}\n");
 		
 		sb.append("\n	@Override\n");
 		sb.append("	public SparseArray<ColumnItem> getAllColumns() {\n")
 				.append("		return ALL_COLUMNS").append(";\n	}\n");
+		
+		sb.append("\n	@Override\n");
+		sb.append("	public ContentValues convertBeanToDatabase").append("(")
+				.append(className).append(" bean) {\n")
+				.append("ContentValues values = new ContentValues();\n");
+
+		Collection<ColumnItem> columns = indexItemMap.values();
+		for (ColumnItem column : columns) {
+			final String columnName = column.columnName;
+			final String filedName = column.fieldName;
+			final SQLDataType sqlType = column.sqlType;
+			final TypeKind fieldType = column.typeKind;
+			if (SQLDataType.BLOB == sqlType) {
+				sb.append("values.put").append("(").append(columnName).append(", ")
+						.append("bean.").append(filedName).append(");\n");
+			} else if (SQLDataType.INTEGER == sqlType) {
+				if (TypeKind.BOOLEAN == fieldType) {
+					sb.append("values.put").append("(").append(columnName)
+							.append(", ").append("bean.").append(filedName)
+							.append(" == true ? 1 : 0);\n");
+				} else {
+					sb.append("values.put").append("(").append(columnName)
+							.append(", ").append("bean.").append(filedName)
+							.append(");\n");
+				}
+			} else if (SQLDataType.REAL == sqlType) {
+				sb.append("values.put").append("(").append(columnName).append(", ")
+						.append("bean.").append(filedName).append(");\n");
+			} else if (SQLDataType.TEXT == sqlType) {
+				sb.append("values.put").append("(").append(columnName).append(", ")
+						.append("bean.").append(filedName).append(".toString());\n");
+			} else if (SQLDataType.NULL == sqlType) {
+				sb.append("values.putNull").append("(").append(columnName)
+						.append(");\n");
+			}
+		}
+		sb.append("		return values;\n	}\n");
 	}
 
 	private void createDAO(String autoAPTPackageName, String daoClassName,
@@ -265,12 +329,14 @@ public class DAOProcessor extends AbstractProcessor {
 		daoContent.append("		return sInstance;\n	}\n");
 		// constructor
 		daoContent.append("\n	private ").append(daoClassName)
-				.append("(Context context, IBeanProxy proxy) {\n");
+				.append("(Context context, IBeanProxy").append("<")
+				.append(element.getSimpleName()).append("> proxy) {\n");
 		daoContent.append("		super(context, proxy);\n	}\n");
 		// override
 		daoContent.append("\n	@Override");
 		daoContent
-				.append("\n	protected void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion, IBeanProxy proxy) {\n");
+				.append("\n	protected void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion, IBeanProxy")
+				.append("<").append(element.getSimpleName()).append("> proxy) {\n");
 		daoContent
 				.append("		db.execSQL(\"DROP TABLE IF EXISTS \" + proxy.getTableName());\n");
 		daoContent.append("		db.execSQL(proxy.getTableCreator());\n	}\n");
