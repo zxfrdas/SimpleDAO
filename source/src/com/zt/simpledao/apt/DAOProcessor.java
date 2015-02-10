@@ -237,29 +237,28 @@ public class DAOProcessor extends AbstractProcessor {
 				.append("		ContentValues values = new ContentValues();\n");
 		final Collection<ColumnItem> columns = indexItemMap.values();
 		for (ColumnItem column : columns) {
-			final String columnName = column.columnName;
 			final String filedName = column.fieldName;
 			final SQLDataType sqlType = column.sqlType;
 			final TypeKind fieldType = column.typeKind;
 			if (SQLDataType.INTEGER == sqlType && TypeKind.BOOLEAN == fieldType) {
-				sb.append("		values.put").append("(").append(columnName).append(", ")
+				sb.append("		values.put").append("(").append(filedName).append(", ")
 						.append("bean.").append(filedName)
 						.append(" == true ? 1 : 0);\n");
 			} else if (SQLDataType.TEXT == sqlType) {
 				if (TypeKind.DECLARED == fieldType) {
-					sb.append("		values.put").append("(").append(columnName)
+					sb.append("		values.put").append("(").append(filedName)
 							.append(", ").append("bean.").append(filedName)
 							.append(".toString());\n");
 				} else {
-					sb.append("		values.put").append("(").append(columnName)
+					sb.append("		values.put").append("(").append(filedName)
 							.append(", ").append("bean.").append(filedName)
 							.append(" + \"\");\n");
 				}
 			} else if (SQLDataType.NULL == sqlType) {
-				sb.append("		values.putNull").append("(").append(columnName)
+				sb.append("		values.putNull").append("(").append(filedName)
 						.append(");\n");
 			} else {
-				sb.append("		values.put").append("(").append(columnName).append(", ")
+				sb.append("		values.put").append("(").append(filedName).append(", ")
 						.append("bean.").append(filedName).append(");\n");
 			}
 		}
