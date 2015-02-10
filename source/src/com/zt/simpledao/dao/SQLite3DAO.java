@@ -1,6 +1,5 @@
-package com.zt.simpledao.dao.sqlite;
+package com.zt.simpledao.dao;
 
-import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -17,15 +16,9 @@ import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteException;
 import android.database.sqlite.SQLiteOpenHelper;
-import android.util.SparseArray;
 
-import com.zt.simpledao.SQLDataType;
-import com.zt.simpledao.bean.ColumnItem;
 import com.zt.simpledao.bean.IBeanProxy;
 import com.zt.simpledao.condition.Condition;
-import com.zt.simpledao.condition.IConditionBuilder;
-import com.zt.simpledao.condition.sqlite.SQLiteConditionBuilder;
-import com.zt.simpledao.dao.IDAO;
 
 public abstract class SQLite3DAO<T> implements IDAO<T> {
 	private final ReadLock mReadLock;
@@ -314,13 +307,7 @@ public abstract class SQLite3DAO<T> implements IDAO<T> {
 			mReadLock.unlock();
 		}
 		List<T> items = new ArrayList<T>();
-		try {
-			items = setCursorValueToBean(c, mProxy.getAllColumns());
-		} catch (IllegalAccessException e) {
-			e.printStackTrace();
-		} catch (IllegalArgumentException e) {
-			e.printStackTrace();
-		}
+		items = mProxy.convertDatabaseToBean(c);
 		return items;
 	}
 
@@ -350,13 +337,7 @@ public abstract class SQLite3DAO<T> implements IDAO<T> {
 			mReadLock.unlock();
 		}
 		List<T> items = new ArrayList<T>();
-		try {
-			items = setCursorValueToBean(c, mProxy.getAllColumns());
-		} catch (IllegalAccessException e) {
-			e.printStackTrace();
-		} catch (IllegalArgumentException e) {
-			e.printStackTrace();
-		}
+		items = mProxy.convertDatabaseToBean(c);
 		return items;
 	}
 
@@ -378,64 +359,6 @@ public abstract class SQLite3DAO<T> implements IDAO<T> {
 			c.close();
 		}
 		return count;
-	}
-
-	@Override
-	public IConditionBuilder buildCondition() {
-		return new SQLiteConditionBuilder();
-	}
-
-	private List<T> setCursorValueToBean(Cursor cursor, SparseArray<ColumnItem> items)
-			throws IllegalAccessException, IllegalArgumentException {
-		List<T> beans = new ArrayList<T>();
-		while (null != cursor && cursor.moveToNext()) {
-			T item = null;
-			try {
-				item = mProxy.getBeanClass().newInstance();
-			} catch (InstantiationException e) {
-				e.printStackTrace();
-			}
-			final int size = items.size();
-			for (int i = 0; i < size; i++) {
-				ColumnItem ci = items.get(i);
-				final int index = ci.index;
-				final SQLDataType type = ci.sqlType;
-				final Field field = ci.field;
-				final Class<?> fieldType = field.getType();
-				field.setAccessible(true);
-				if (SQLDataType.BLOB == type) {
-					field.set(item, cursor.getBlob(index));
-				} else if (SQLDataType.INTEGER == type) {
-					if (boolean.class.equals(fieldType)
-							|| Boolean.class.equals(fieldType)) {
-						field.set(item, 1 == cursor.getInt(index) ? true : false);
-					} else if (int.class.equals(fieldType)
-							|| Integer.class.equals(fieldType)) {
-						field.set(item, cursor.getInt(index));
-					} else if (long.class.equals(fieldType)
-							|| Long.class.equals(fieldType)) {
-						field.set(item, cursor.getLong(index));
-					} else if (short.class.equals(fieldType)
-							|| Short.class.equals(fieldType)) {
-						field.set(item, cursor.getShort(index));
-					}
-				} else if (SQLDataType.REAL == type) {
-					if (float.class.equals(fieldType)
-							|| Float.class.equals(fieldType)) {
-						field.set(item, cursor.getFloat(index));
-					} else if (double.class.equals(fieldType)
-							|| Double.class.equals(fieldType)) {
-						field.set(item, cursor.getDouble(index));
-					}
-				} else if (SQLDataType.TEXT == type) {
-					field.set(item, cursor.getString(index));
-				} else if (SQLDataType.NULL == type) {
-					field.set(item, null);
-				}
-			}
-			beans.add(item);
-		}
-		return beans;
 	}
 
 }

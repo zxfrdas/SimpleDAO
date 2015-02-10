@@ -8,7 +8,6 @@ import android.content.ContentValues;
 import android.database.Cursor;
 
 import com.zt.simpledao.condition.Condition;
-import com.zt.simpledao.condition.IConditionBuilder;
 
 public interface IDAO<T> {
 	
@@ -142,12 +141,5 @@ public interface IDAO<T> {
 	 * @return 表的行数
 	 */
 	int getCount();
-
-	/**
-	 * 获取增删改查条件构造器
-	 * 
-	 * @return
-	 */
-	IConditionBuilder buildCondition();
 
 }

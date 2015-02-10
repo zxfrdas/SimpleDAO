@@ -88,7 +88,6 @@ public class DAOProcessor extends AbstractProcessor {
 				.append("\"").append(crateTable(t.name())).append("\"")
 				.append(";\n");
 		
-		appendBeanProxyColumnMap(element, proxyContent);
 		// method
 		appendMethods(proxyContent, element.getSimpleName().toString());
 		// class end
@@ -119,12 +118,12 @@ public class DAOProcessor extends AbstractProcessor {
 	}
 	
 	private void appendBeanProxyImport(Element element, StringBuilder content) {
-		content.append("\nimport ").append("android.content.ContentValues;\n");
-		content.append("\nimport ").append("android.util.SparseArray;\n");
+		content.append("\nimport java.util.ArrayList;");
+		content.append("\nimport java.util.List;\n");
+		content.append("\nimport android.content.ContentValues;");
+		content.append("\nimport android.database.Cursor;");
 		content.append("\nimport ").append(element.toString()).append(";\n");
-		content.append("import com.zt.simpledao.bean.ColumnItem;\n");
 		content.append("import com.zt.simpledao.bean.IBeanProxy;\n");
-		content.append("import com.zt.simpledao.SQLDataType;\n");
 	}
 	
 	private void appendBeanProxyClassStart(String proxyClassName, Element element,
@@ -156,8 +155,7 @@ public class DAOProcessor extends AbstractProcessor {
 				column.columnName = (null != c.name() && !c.name().isEmpty()) ? c
 						.name() : column.fieldName;
 				column.sqlType = c.type();
-				column.primary = c.primary();
-				if (column.primary) {
+				if (c.primary()) {
 					primaryKeys.add(column);
 				}
 				column.typeKind = element2.asType().getKind();
@@ -205,34 +203,6 @@ public class DAOProcessor extends AbstractProcessor {
 		}
 		return sb.toString();
 	}
-	
-	private void appendBeanProxyColumnMap(Element element, StringBuilder content) {
-		// field column map
-		content.append(
-				"	private static final SparseArray<ColumnItem> ALL_COLUMNS = new SparseArray<ColumnItem>(")
-				.append(indexItemMap.size()).append(");\n");
-		// fill column map
-		content.append("	static {\n").append("		Class<")
-				.append(element.getSimpleName().toString()).append("> claz = ")
-				.append(element.getSimpleName().toString()).append(".class;\n");
-		content.append("		try {\n");
-		final Set<Integer> keySet = indexItemMap.keySet();
-		for (Integer key : keySet) {
-			ColumnItem value = indexItemMap.get(key);
-			content.append("			ColumnItem item").append(key)
-					.append(" = new ColumnItem(").append(key).append(", \"")
-					.append(value.columnName).append("\", ").append("SQLDataType.")
-					.append(value.sqlType.toString()).append(", ")
-					.append(value.primary).append(", ")
-					.append("claz.getDeclaredField(\"").append(value.fieldName)
-					.append("\"));\n");
-			content.append("			ALL_COLUMNS.put(").append(key).append(", item")
-					.append(key).append(");\n");
-		}
-		content.append("		} catch (NoSuchFieldException e) {\n")
-				.append("			e.printStackTrace();\n").append("		}\n")
-				.append("	}\n");
-	}
 
 	private void appendMethods(StringBuilder sb, String className) {
 		sb.append("\n	@Override\n");
@@ -256,46 +226,142 @@ public class DAOProcessor extends AbstractProcessor {
 				.append("> getBeanClass() {\n").append("		return ")
 				.append(className).append(".class;\n	}\n");
 		
-		sb.append("\n	@Override\n");
-		sb.append("	public SparseArray<ColumnItem> getAllColumns() {\n")
-				.append("		return ALL_COLUMNS").append(";\n	}\n");
-		
+		appendConvertBeanToDB(sb, className);
+		appendConvertDBToBean(sb, className);
+	}
+	
+	private void appendConvertBeanToDB(StringBuilder sb, String className) {
 		sb.append("\n	@Override\n");
 		sb.append("	public ContentValues convertBeanToDatabase").append("(")
 				.append(className).append(" bean) {\n")
-				.append("ContentValues values = new ContentValues();\n");
-
-		Collection<ColumnItem> columns = indexItemMap.values();
+				.append("		ContentValues values = new ContentValues();\n");
+		final Collection<ColumnItem> columns = indexItemMap.values();
 		for (ColumnItem column : columns) {
 			final String columnName = column.columnName;
 			final String filedName = column.fieldName;
 			final SQLDataType sqlType = column.sqlType;
 			final TypeKind fieldType = column.typeKind;
-			if (SQLDataType.BLOB == sqlType) {
-				sb.append("values.put").append("(").append(columnName).append(", ")
-						.append("bean.").append(filedName).append(");\n");
-			} else if (SQLDataType.INTEGER == sqlType) {
-				if (TypeKind.BOOLEAN == fieldType) {
-					sb.append("values.put").append("(").append(columnName)
-							.append(", ").append("bean.").append(filedName)
-							.append(" == true ? 1 : 0);\n");
-				} else {
-					sb.append("values.put").append("(").append(columnName)
-							.append(", ").append("bean.").append(filedName)
-							.append(");\n");
-				}
-			} else if (SQLDataType.REAL == sqlType) {
-				sb.append("values.put").append("(").append(columnName).append(", ")
-						.append("bean.").append(filedName).append(");\n");
+			if (SQLDataType.INTEGER == sqlType && TypeKind.BOOLEAN == fieldType) {
+				sb.append("		values.put").append("(").append(columnName).append(", ")
+						.append("bean.").append(filedName)
+						.append(" == true ? 1 : 0);\n");
 			} else if (SQLDataType.TEXT == sqlType) {
-				sb.append("values.put").append("(").append(columnName).append(", ")
-						.append("bean.").append(filedName).append(".toString());\n");
+				if (TypeKind.DECLARED == fieldType) {
+					sb.append("		values.put").append("(").append(columnName)
+							.append(", ").append("bean.").append(filedName)
+							.append(".toString());\n");
+				} else {
+					sb.append("		values.put").append("(").append(columnName)
+							.append(", ").append("bean.").append(filedName)
+							.append(" + \"\");\n");
+				}
 			} else if (SQLDataType.NULL == sqlType) {
-				sb.append("values.putNull").append("(").append(columnName)
+				sb.append("		values.putNull").append("(").append(columnName)
 						.append(");\n");
+			} else {
+				sb.append("		values.put").append("(").append(columnName).append(", ")
+						.append("bean.").append(filedName).append(");\n");
 			}
 		}
 		sb.append("		return values;\n	}\n");
+	}
+	
+	private void appendConvertDBToBean(StringBuilder sb, String className) {
+		sb.append("\n	@Override\n");
+		sb.append("	public List<").append(className).append(">")
+				.append(" convertDatabaseToBean(Cursor cursor) {\n")
+				.append("		List<").append(className)
+				.append("> beans = new ArrayList<").append(className)
+				.append(">();\n");
+		sb.append("		if (null != cursor) {\n			while(cursor.moveToNext()) {\n");
+		sb.append("				try {\n").append("					");
+		sb.append(className).append(" item = getBeanClass().newInstance();\n");
+		final Collection<ColumnItem> columns = indexItemMap.values();
+		for (ColumnItem column : columns) {
+			final String fieldName = column.fieldName;
+			final SQLDataType sqlType = column.sqlType;
+			final TypeKind fieldType = column.typeKind;
+			if (SQLDataType.INTEGER == sqlType) {
+				sb.append("					");
+				if (TypeKind.BOOLEAN == fieldType) {
+					sb.append("item.").append(fieldName).append(" = cursor.getInt(")
+							.append(column.index).append(") == 1 ? true : false;\n");
+				} else if (TypeKind.LONG == fieldType) {
+					sb.append("item.").append(fieldName)
+							.append(" = cursor.getLong(").append(column.index)
+							.append(");\n");
+				} else if (TypeKind.SHORT == fieldType) {
+					sb.append("item.").append(fieldName)
+							.append(" = cursor.getShort(").append(column.index)
+							.append(");\n");
+				} else if (TypeKind.INT == fieldType) {
+					sb.append("item.").append(fieldName).append(" = cursor.getInt(")
+							.append(column.index).append(");\n");
+				}
+			} else if (SQLDataType.TEXT == sqlType) {
+				sb.append("					");
+				if (TypeKind.BOOLEAN == fieldType) {
+					sb.append("item.").append(fieldName)
+							.append(" = Boolean.valueOf(cursor.getString(")
+							.append(column.index).append("));\n");
+				} else if (TypeKind.DOUBLE == fieldType) {
+					sb.append("item.").append(fieldName)
+							.append(" = Double.valueOf(cursor.getString(")
+							.append(column.index).append("));\n");
+				} else if (TypeKind.FLOAT == fieldType) {
+					sb.append("item.").append(fieldName)
+							.append(" = Float.valueOf(cursor.getString(")
+							.append(column.index).append("));\n");
+				} else if (TypeKind.INT == fieldType) {
+					sb.append("item.").append(fieldName)
+							.append(" = Integer.valueOf(cursor.getString(")
+							.append(column.index).append("));\n");
+				} else if (TypeKind.LONG == fieldType) {
+					sb.append("item.").append(fieldName)
+							.append(" = Long.valueOf(cursor.getString(")
+							.append(column.index).append("));\n");
+				} else if (TypeKind.SHORT == fieldType) {
+					sb.append("item.").append(fieldName)
+							.append(" = Short.valueOf(cursor.getString(")
+							.append(column.index).append("));\n");
+				} else {
+					sb.append("item.").append(fieldName)
+							.append(" = cursor.getString(").append(column.index)
+							.append(");\n");
+				}
+			} else if (SQLDataType.NULL == sqlType) {
+				sb.append("					");
+				sb.append("item.").append(fieldName).append(" = null;\n");
+			} else if (SQLDataType.BLOB == sqlType) {
+				sb.append("					");
+				sb.append("item.").append(fieldName).append(" = cursor.getBlob(")
+						.append(column.index).append(");\n");
+			} else if (SQLDataType.REAL == sqlType) {
+				sb.append("					");
+				if (TypeKind.FLOAT == fieldType) {
+					sb.append("item.").append(fieldName)
+							.append(" = cursor.getFloat(").append(column.index)
+							.append(");\n");
+				} else if (TypeKind.DOUBLE == fieldType) {
+					sb.append("item.").append(fieldName)
+							.append(" = cursor.getDouble(").append(column.index)
+							.append(");\n");
+				}
+			}
+		}
+		sb.append("					");
+		sb.append("beans.add(item);\n");
+		sb.append("				");
+		sb.append("} catch (InstantiationException e) {\n");
+		sb.append("					");
+		sb.append("e.printStackTrace();\n");
+		sb.append("				");
+		sb.append("} catch (IllegalAccessException e) {\n");
+		sb.append("					");
+		sb.append("e.printStackTrace();\n");
+		sb.append("				");
+		sb.append("}\n			}\n");
+		sb.append("			cursor.close();\n		}\n		return beans;\n	}\n");
 	}
 
 	private void createDAO(String autoAPTPackageName, String daoClassName,
@@ -307,7 +373,7 @@ public class DAOProcessor extends AbstractProcessor {
 		daoContent.append("\nimport android.content.Context;\n");
 		daoContent.append("import android.database.sqlite.SQLiteDatabase;\n");
 		daoContent.append("import com.zt.simpledao.bean.IBeanProxy;\n");
-		daoContent.append("import com.zt.simpledao.dao.sqlite.SQLite3DAO;\n");
+		daoContent.append("import com.zt.simpledao.dao.SQLite3DAO;\n");
 		daoContent.append("import ").append(element.toString()).append(";\n");
 		daoContent.append("import ").append(autoAPTPackageName).append(".")
 				.append(proxyClassName).append(";\n");
@@ -351,11 +417,6 @@ public class DAOProcessor extends AbstractProcessor {
 		} catch (IOException e) {
 			e.printStackTrace();
 		}
-	}
-
-	@Override
-	public SourceVersion getSupportedSourceVersion() {
-		return super.getSupportedSourceVersion();
 	}
 	
 	private void error(String msg, Element e) {

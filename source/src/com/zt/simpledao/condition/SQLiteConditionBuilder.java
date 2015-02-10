@@ -1,12 +1,8 @@
-package com.zt.simpledao.condition.sqlite;
+package com.zt.simpledao.condition;
 
 import java.util.ArrayList;
 import java.util.List;
 
-import com.zt.simpledao.condition.Condition;
-import com.zt.simpledao.condition.IConditionBuilder;
-import com.zt.simpledao.condition.IOrderby;
-import com.zt.simpledao.condition.IWhere;
 
 @SuppressWarnings("unchecked")
 public class SQLiteConditionBuilder implements IConditionBuilder {

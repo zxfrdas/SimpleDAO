@@ -8,7 +8,7 @@ import org.junit.Test;
 
 import com.zt.simpledao.condition.Condition;
 import com.zt.simpledao.condition.IConditionBuilder;
-import com.zt.simpledao.condition.sqlite.SQLiteConditionBuilder;
+import com.zt.simpledao.condition.SQLiteConditionBuilder;
 
 public class SQLiteConditionBuilderTest {
 	IConditionBuilder builder;

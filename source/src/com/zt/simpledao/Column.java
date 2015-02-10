@@ -9,7 +9,7 @@ import java.lang.annotation.Target;
  * 声明该字段为数据库的列
  */
 @Target(ElementType.FIELD)
-@Retention(RetentionPolicy.RUNTIME)
+@Retention(RetentionPolicy.SOURCE)
 public @interface Column {
 	/**
 	 * 指定该字段代表的列在数据库中的index，不指定则由本类库进行排序指定

@@ -4,15 +4,20 @@ package com.zt.simpledao.condition;
  * SQL条件语句
  */
 public class Condition {
-	
 	private String selection;
 	private String[] selectionArgs;
 	private String orderBy;
 	private String groupby;
 	
-	public Condition() {
-		
+	/**
+	 * 开始构造条件语句
+	 * @return 条件语句构造器
+	 */
+	public static IConditionBuilder build() {
+		return new SQLiteConditionBuilder();
 	}
+	
+	protected Condition() {}
 
 	public String getSelection() {
 		return selection;
