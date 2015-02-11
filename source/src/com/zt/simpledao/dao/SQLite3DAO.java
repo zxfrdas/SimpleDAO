@@ -16,6 +16,7 @@ import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteException;
 import android.database.sqlite.SQLiteOpenHelper;
+import android.database.sqlite.SQLiteStatement;
 
 import com.zt.simpledao.bean.IBeanProxy;
 import com.zt.simpledao.condition.Condition;
@@ -77,10 +78,11 @@ public abstract class SQLite3DAO<T> implements IDAO<T> {
 	@Override
 	public boolean insert(T item) {
 		long ret = -1;
-		ContentValues values = mProxy.convertBeanToDatabase(item);
 		mWriteLock.lock();
 		try {
-			ret = mDatabase.insert(tableName, null, values);
+			SQLiteStatement statement = mProxy.createInsertSQL(mDatabase, item);
+			ret = statement.executeInsert();
+			statement.close();
 		} catch (SQLiteException e) {
 			e.printStackTrace();
 		} finally {
@@ -95,16 +97,13 @@ public abstract class SQLite3DAO<T> implements IDAO<T> {
 	@Override
 	public boolean insert(Collection<T> items) {
 		long ret = -1;
-		ArrayList<ContentValues> values = new ArrayList<ContentValues>();
-		for (T item : items) {
-			ContentValues value = mProxy.convertBeanToDatabase(item);
-			values.add(value);
-		}
 		mWriteLock.lock();
 		mDatabase.beginTransaction();
 		try {
-			for (ContentValues v : values) {
-				ret = mDatabase.insert(tableName, null, v);
+			for (T item : items) {
+				SQLiteStatement statement = mProxy.createInsertSQL(mDatabase, item);
+				ret = statement.executeInsert();
+				statement.close();
 			}
 			mDatabase.setTransactionSuccessful();
 		} catch (SQLiteException e) {

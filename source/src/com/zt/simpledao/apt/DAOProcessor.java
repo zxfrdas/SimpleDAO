@@ -87,6 +87,10 @@ public class DAOProcessor extends AbstractProcessor {
 		proxyContent.append("	private static final String TABLE_CREATOR = ")
 				.append("\"").append(crateTable(t.name())).append("\"")
 				.append(";\n");
+		// cache
+		proxyContent.append("	private static final HashMap<Class<").append(element.getSimpleName())
+				.append(">, String> mSqlCache = new HashMap<Class<")
+				.append(element.getSimpleName()).append(">, String>();");
 		
 		// method
 		appendMethods(proxyContent, element.getSimpleName().toString());
@@ -119,9 +123,12 @@ public class DAOProcessor extends AbstractProcessor {
 	
 	private void appendBeanProxyImport(Element element, StringBuilder content) {
 		content.append("\nimport java.util.ArrayList;");
+		content.append("\nimport java.util.HashMap;");
 		content.append("\nimport java.util.List;\n");
 		content.append("\nimport android.content.ContentValues;");
 		content.append("\nimport android.database.Cursor;");
+		content.append("\nimport android.database.sqlite.SQLiteDatabase;");
+		content.append("\nimport android.database.sqlite.SQLiteStatement;");
 		content.append("\nimport ").append(element.toString()).append(";\n");
 		content.append("import com.zt.simpledao.bean.IBeanProxy;\n");
 	}
@@ -228,6 +235,7 @@ public class DAOProcessor extends AbstractProcessor {
 		
 		appendConvertBeanToDB(sb, className);
 		appendConvertDBToBean(sb, className);
+		appendCreateInsertSQL(sb, className);
 	}
 	
 	private void appendConvertBeanToDB(StringBuilder sb, String className) {
@@ -361,6 +369,73 @@ public class DAOProcessor extends AbstractProcessor {
 		sb.append("				");
 		sb.append("}\n			}\n");
 		sb.append("			cursor.close();\n		}\n		return beans;\n	}\n");
+	}
+	
+	private void appendCreateInsertSQL(StringBuilder sb, String className) {
+		sb.append("\n	@Override\n");
+		sb.append("	public SQLiteStatement createInsertSQL(SQLiteDatabase database, TestBean bean) {\n");
+		sb.append("		String sql = mSqlCache.get(getBeanClass());\n");
+		sb.append("		if (null == sql) {\n");
+		sb.append("			StringBuilder sb = new StringBuilder(\"insert into \");\n");
+		sb.append("			sb.append(TABLE).append(\" (\");\n");
+		final Collection<ColumnItem> columns = indexItemMap.values();
+		final int count = columns.size();
+		int index = 0;
+		for (ColumnItem column : columns) {
+			final String fieldName = column.fieldName;
+			sb.append("			sb.append(").append(fieldName).append(")");
+			if (index < (count - 1)) {
+				sb.append(".append(\",\");\n");
+			} else {
+				sb.append(";\n");
+			}
+			index ++;
+		}
+		sb.append("			sb.append(\") values(\");\n");
+		for (int i = 0; i < count; i ++) {
+			sb.append("			sb.append(\"?\")");
+			if (i < (count - 1)) {
+				sb.append(".append(\",\");\n");
+			} else {
+				sb.append(";\n");
+			}
+		}
+		sb.append("			sb.append(\");\");\n");
+		sb.append("			sql = sb.toString();\n");
+		sb.append("			mSqlCache.put(getBeanClass(), sql);\n		}\n");
+		sb.append("		SQLiteStatement sqLiteStatement = database.compileStatement(sql);\n");
+		for (ColumnItem column : columns) {
+			final int bindId = column.index + 1;
+			final SQLDataType sqlType = column.sqlType;
+			final TypeKind fieldType = column.typeKind;
+			final String fieldName = column.fieldName;
+			if (SQLDataType.BLOB == sqlType) {
+				sb.append("		");
+				sb.append("sqLiteStatement.bindBlob(").append(bindId).append(", bean.")
+						.append(fieldName).append(");\n");
+			} else if (SQLDataType.INTEGER == sqlType) {
+				sb.append("		");
+				sb.append("sqLiteStatement.bindLong(").append(bindId).append(", bean.")
+						.append(fieldName);
+				if (TypeKind.BOOLEAN == fieldType) {
+					sb.append(" ? 1 : 0);\n");
+				} else {
+					sb.append(");\n");
+				}
+			} else if (SQLDataType.REAL == sqlType) {
+				sb.append("		");
+				sb.append("sqLiteStatement.bindDouble(").append(bindId).append(", bean.")
+						.append(fieldName).append(");\n");
+			} else if (SQLDataType.TEXT == sqlType) {
+				sb.append("		");
+				sb.append("sqLiteStatement.bindString(").append(bindId).append(", bean.")
+						.append(fieldName).append(");\n");
+			} else if (SQLDataType.NULL == sqlType) {
+				sb.append("		");
+				sb.append("sqLiteStatement.bindNull(").append(bindId).append(");\n");
+			}
+		}
+		sb.append("		return sqLiteStatement;\n	}\n");
 	}
 
 	private void createDAO(String autoAPTPackageName, String daoClassName,
