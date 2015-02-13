@@ -373,7 +373,8 @@ public class DAOProcessor extends AbstractProcessor {
 	
 	private void appendCreateInsertSQL(StringBuilder sb, String className) {
 		sb.append("\n	@Override\n");
-		sb.append("	public SQLiteStatement createInsertSQL(SQLiteDatabase database, TestBean bean) {\n");
+		sb.append("	public SQLiteStatement createInsertSQL(SQLiteDatabase database,")
+				.append(className).append(" bean) {\n");
 		sb.append("		String sql = mSqlCache.get(getBeanClass());\n");
 		sb.append("		if (null == sql) {\n");
 		sb.append("			StringBuilder sb = new StringBuilder(\"insert into \");\n");
