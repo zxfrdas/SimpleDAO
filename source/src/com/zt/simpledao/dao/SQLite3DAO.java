@@ -2,10 +2,10 @@ package com.zt.simpledao.dao;
 
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Set;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock.ReadLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock.WriteLock;
@@ -79,10 +79,13 @@ public abstract class SQLite3DAO<T> implements IDAO<T> {
 	public boolean insert(T item) {
 		long ret = -1;
 		mWriteLock.lock();
+		SQLiteStatement statement = mProxy.createInsertSQL(mDatabase, item);
 		try {
-			SQLiteStatement statement = mProxy.createInsertSQL(mDatabase, item);
-			ret = statement.executeInsert();
-			statement.close();
+			try {
+				ret = statement.executeInsert();
+			} finally {
+				statement.close();
+			}
 		} catch (SQLiteException e) {
 			e.printStackTrace();
 		} finally {
@@ -102,8 +105,11 @@ public abstract class SQLite3DAO<T> implements IDAO<T> {
 		try {
 			for (T item : items) {
 				SQLiteStatement statement = mProxy.createInsertSQL(mDatabase, item);
-				ret = statement.executeInsert();
-				statement.close();
+				try {
+					ret = statement.executeInsert();
+				} finally {
+					statement.close();
+				}
 			}
 			mDatabase.setTransactionSuccessful();
 		} catch (SQLiteException e) {
@@ -180,16 +186,18 @@ public abstract class SQLite3DAO<T> implements IDAO<T> {
 	@Override
 	public boolean update(T item, Condition condition) {
 		long ret = -1;
-		ContentValues value = mProxy.convertBeanToDatabase(item);
 		mWriteLock.lock();
+		SQLiteStatement statement = mProxy.createUpdateSQL(mDatabase, item,
+				condition.getSelection(), condition.getSelectionArgs());
 		try {
-			ret = mDatabase.update(tableName, value, condition.getSelection(),
-					condition.getSelectionArgs());
+			ret = statement.executeUpdateDelete();
 		} catch (SQLiteException e) {
 			e.printStackTrace();
+			ret = -1;
 		} finally {
-			mWriteLock.unlock();
+			statement.close();
 		}
+		mWriteLock.unlock();
 		if (-1 != ret) {
 			return true;
 		}
@@ -199,17 +207,17 @@ public abstract class SQLite3DAO<T> implements IDAO<T> {
 	@Override
 	public boolean update(Collection<T> items, Condition condition) {
 		long ret = -1;
-		ArrayList<ContentValues> values = new ArrayList<ContentValues>();
-		for (T item : items) {
-			ContentValues value = mProxy.convertBeanToDatabase(item);
-			values.add(value);
-		}
 		mWriteLock.lock();
 		mDatabase.beginTransaction();
 		try {
-			for (ContentValues value : values) {
-				ret = mDatabase.update(tableName, value, condition.getSelection(),
-						condition.getSelectionArgs());
+			for (T item : items) {
+				SQLiteStatement statement = mProxy.createUpdateSQL(mDatabase, item,
+						condition.getSelection(), condition.getSelectionArgs());
+				try {
+					ret = statement.executeUpdateDelete();
+				} finally {
+					statement.close();
+				}
 			}
 			mDatabase.setTransactionSuccessful();
 		} catch (SQLiteException e) {
@@ -228,17 +236,19 @@ public abstract class SQLite3DAO<T> implements IDAO<T> {
 	@Override
 	public boolean update(Map<T, Condition> updates) {
 		long ret = -1;
-		Map<ContentValues, Condition> values = new HashMap<ContentValues, Condition>();
-		for (Entry<T, Condition> update : updates.entrySet()) {
-			ContentValues value = mProxy.convertBeanToDatabase(update.getKey());
-			values.put(value, update.getValue());
-		}
 		mWriteLock.lock();
 		mDatabase.beginTransaction();
 		try {
-			for (Entry<ContentValues, Condition> value : values.entrySet()) {
-				ret = mDatabase.update(tableName, value.getKey(), value.getValue()
-						.getSelection(), value.getValue().getSelectionArgs());
+			final Set<Entry<T, Condition>> entrySet = updates.entrySet();
+			for (Entry<T, Condition> entry : entrySet) {
+				SQLiteStatement statement = mProxy.createUpdateSQL(mDatabase, entry
+						.getKey(), entry.getValue().getSelection(), entry.getValue()
+						.getSelectionArgs());
+				try {
+					ret = statement.executeUpdateDelete();
+				} finally {
+					statement.close();
+				}
 			}
 			mDatabase.setTransactionSuccessful();
 		} catch (SQLiteException e) {

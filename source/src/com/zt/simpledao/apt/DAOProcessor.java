@@ -87,11 +87,14 @@ public class DAOProcessor extends AbstractProcessor {
 		proxyContent.append("	private static final String TABLE_CREATOR = ")
 				.append("\"").append(crateTable(t.name())).append("\"")
 				.append(";\n");
-		// cache
-		proxyContent.append("	private static final HashMap<Class<").append(element.getSimpleName())
-				.append(">, String> mSqlCache = new HashMap<Class<")
-				.append(element.getSimpleName()).append(">, String>();");
-		
+		proxyContent.append("	private static final HashMap<String, String> CACHE")
+				.append(" = new HashMap<String, String>();\n");
+		// sql string
+		// insert
+		appendInsertSQLString(proxyContent, t.name());
+		// update
+		appendUpdateSQLString(proxyContent, t.name());
+
 		// method
 		appendMethods(proxyContent, element.getSimpleName().toString());
 		// class end
@@ -111,28 +114,29 @@ public class DAOProcessor extends AbstractProcessor {
 			if (null != writer) {
 				try {
 					writer.close();
-				} catch (IOException e) {}
+				} catch (IOException e) {
+				}
 			}
 		}
 	}
-	
+
 	private void appendBeanProxyPackage(String autoAPTPackageName,
 			StringBuilder content) {
 		content.append("package ").append(autoAPTPackageName).append(";\n");
 	}
-	
+
 	private void appendBeanProxyImport(Element element, StringBuilder content) {
 		content.append("\nimport java.util.ArrayList;");
 		content.append("\nimport java.util.HashMap;");
 		content.append("\nimport java.util.List;\n");
-		content.append("\nimport android.content.ContentValues;");
 		content.append("\nimport android.database.Cursor;");
 		content.append("\nimport android.database.sqlite.SQLiteDatabase;");
 		content.append("\nimport android.database.sqlite.SQLiteStatement;");
+		content.append("\nimport android.text.TextUtils;");
 		content.append("\nimport ").append(element.toString()).append(";\n");
 		content.append("import com.zt.simpledao.bean.IBeanProxy;\n");
 	}
-	
+
 	private void appendBeanProxyClassStart(String proxyClassName, Element element,
 			StringBuilder content) {
 		content.append("\npublic class ").append(proxyClassName)
@@ -140,7 +144,7 @@ public class DAOProcessor extends AbstractProcessor {
 				.append(element.getSimpleName()).append(">").append(" {\n");
 		content.append("	// ").append(element.toString()).append("\n");
 	}
-	
+
 	private void appendBeanProxyColumnConst(Element element, StringBuilder content) {
 		if (null == primaryKeys) {
 			primaryKeys = new ArrayList<ColumnItem>();
@@ -177,7 +181,7 @@ public class DAOProcessor extends AbstractProcessor {
 			}
 		}
 	}
-	
+
 	private String crateTable(String table) {
 		// Create table xxx (column type, column type, primary key (column));
 		StringBuilder sb = new StringBuilder();
@@ -193,7 +197,7 @@ public class DAOProcessor extends AbstractProcessor {
 					// 存在主键，在最后添加主键语句
 					sb.append(", ").append("primary key (");
 					final int primaryTotal = primaryKeys.size();
-					for (int pri = 0; pri < primaryTotal; pri ++) {
+					for (int pri = 0; pri < primaryTotal; pri++) {
 						ColumnItem primary = primaryKeys.get(pri);
 						sb.append(primary.columnName);
 						if (pri != (primaryTotal - 1)) {
@@ -209,6 +213,53 @@ public class DAOProcessor extends AbstractProcessor {
 			}
 		}
 		return sb.toString();
+	}
+
+	private void appendInsertSQLString(StringBuilder sb, String tableName) {
+		sb.append("	private static final String INSERT = \"insert into ")
+				.append(tableName).append(" (");
+		final Collection<ColumnItem> columns = indexItemMap.values();
+		final int count = columns.size();
+		int index = 0;
+		for (ColumnItem column : columns) {
+			final String fieldName = column.fieldName;
+			sb.append(fieldName);
+			if (index < (count - 1)) {
+				sb.append(",");
+			} else {
+				sb.append(") ");
+			}
+			index++;
+		}
+		sb.append("values(");
+		for (int i = 0; i < count; i++) {
+			sb.append("?");
+			if (i < (count - 1)) {
+				sb.append(",");
+			} else {
+				sb.append(");");
+			}
+		}
+		sb.append("\";\n");
+	}
+
+	private void appendUpdateSQLString(StringBuilder sb, String tableName) {
+		sb.append("	private static final String UPDATE = \"update ")
+				.append(tableName).append(" set ");
+		final Collection<ColumnItem> columns = indexItemMap.values();
+		final int count = columns.size();
+		int index = 0;
+		for (ColumnItem column : columns) {
+			final String fieldName = column.fieldName;
+			sb.append(fieldName).append("=?");
+			if (index < (count - 1)) {
+				sb.append(", ");
+			} else {
+				sb.append(" ");
+			}
+			index++;
+		}
+		sb.append("\";\n");
 	}
 
 	private void appendMethods(StringBuilder sb, String className) {
@@ -232,47 +283,13 @@ public class DAOProcessor extends AbstractProcessor {
 		sb.append("	public Class").append("<").append(className)
 				.append("> getBeanClass() {\n").append("		return ")
 				.append(className).append(".class;\n	}\n");
-		
-		appendConvertBeanToDB(sb, className);
+
 		appendConvertDBToBean(sb, className);
 		appendCreateInsertSQL(sb, className);
+		appendCreateUpdateSQL(sb, className);
+		appendBindBeanArg(sb, className);
 	}
-	
-	private void appendConvertBeanToDB(StringBuilder sb, String className) {
-		sb.append("\n	@Override\n");
-		sb.append("	public ContentValues convertBeanToDatabase").append("(")
-				.append(className).append(" bean) {\n")
-				.append("		ContentValues values = new ContentValues();\n");
-		final Collection<ColumnItem> columns = indexItemMap.values();
-		for (ColumnItem column : columns) {
-			final String filedName = column.fieldName;
-			final SQLDataType sqlType = column.sqlType;
-			final TypeKind fieldType = column.typeKind;
-			if (SQLDataType.INTEGER == sqlType && TypeKind.BOOLEAN == fieldType) {
-				sb.append("		values.put").append("(").append(filedName).append(", ")
-						.append("bean.").append(filedName)
-						.append(" == true ? 1 : 0);\n");
-			} else if (SQLDataType.TEXT == sqlType) {
-				if (TypeKind.DECLARED == fieldType) {
-					sb.append("		values.put").append("(").append(filedName)
-							.append(", ").append("bean.").append(filedName)
-							.append(".toString());\n");
-				} else {
-					sb.append("		values.put").append("(").append(filedName)
-							.append(", ").append("bean.").append(filedName)
-							.append(" + \"\");\n");
-				}
-			} else if (SQLDataType.NULL == sqlType) {
-				sb.append("		values.putNull").append("(").append(filedName)
-						.append(");\n");
-			} else {
-				sb.append("		values.put").append("(").append(filedName).append(", ")
-						.append("bean.").append(filedName).append(");\n");
-			}
-		}
-		sb.append("		return values;\n	}\n");
-	}
-	
+
 	private void appendConvertDBToBean(StringBuilder sb, String className) {
 		sb.append("\n	@Override\n");
 		sb.append("	public List<").append(className).append(">")
@@ -370,41 +387,47 @@ public class DAOProcessor extends AbstractProcessor {
 		sb.append("}\n			}\n");
 		sb.append("			cursor.close();\n		}\n		return beans;\n	}\n");
 	}
-	
+
 	private void appendCreateInsertSQL(StringBuilder sb, String className) {
 		sb.append("\n	@Override\n");
 		sb.append("	public SQLiteStatement createInsertSQL(SQLiteDatabase database,")
 				.append(className).append(" bean) {\n");
-		sb.append("		String sql = mSqlCache.get(getBeanClass());\n");
+		sb.append("		SQLiteStatement sqLiteStatement = database.compileStatement(INSERT);\n");
+		sb.append("		bindBeanArg(sqLiteStatement, bean);\n");
+		sb.append("		return sqLiteStatement;\n	}\n");
+	}
+	
+	private void appendCreateUpdateSQL(StringBuilder sb, String className) {
+		sb.append("\n	@Override\n");
+		sb.append("	public SQLiteStatement createUpdateSQL(SQLiteDatabase database,")
+				.append(className)
+				.append(" bean, String whereClause, String[] whereArgs) {\n");
+		final int beanArgCount = indexItemMap.size();
+		sb.append("		final int argCount = (null == whereArgs) ? ")
+				.append(beanArgCount).append(" : ").append("(").append(beanArgCount)
+				.append(" + whereArgs.length);\n");
+		sb.append("		String sql = CACHE.get(whereClause);\n");
 		sb.append("		if (null == sql) {\n");
-		sb.append("			StringBuilder sb = new StringBuilder(\"insert into \");\n");
-		sb.append("			sb.append(TABLE).append(\" (\");\n");
-		final Collection<ColumnItem> columns = indexItemMap.values();
-		final int count = columns.size();
-		int index = 0;
-		for (ColumnItem column : columns) {
-			final String fieldName = column.fieldName;
-			sb.append("			sb.append(").append(fieldName).append(")");
-			if (index < (count - 1)) {
-				sb.append(".append(\",\");\n");
-			} else {
-				sb.append(";\n");
-			}
-			index ++;
-		}
-		sb.append("			sb.append(\") values(\");\n");
-		for (int i = 0; i < count; i ++) {
-			sb.append("			sb.append(\"?\")");
-			if (i < (count - 1)) {
-				sb.append(".append(\",\");\n");
-			} else {
-				sb.append(";\n");
-			}
-		}
-		sb.append("			sb.append(\");\");\n");
+		sb.append("			StringBuilder sb = new StringBuilder(UPDATE);\n");
+		sb.append("			if (!TextUtils.isEmpty(whereClause)) {\n");
+		sb.append("				sb.append(\" where \").append(whereClause);\n");
+		sb.append("			}\n");
 		sb.append("			sql = sb.toString();\n");
-		sb.append("			mSqlCache.put(getBeanClass(), sql);\n		}\n");
-		sb.append("		SQLiteStatement sqLiteStatement = database.compileStatement(sql);\n");
+		sb.append("			CACHE.put(whereClause, sql);\n");
+		sb.append("		}\n");
+		sb.append("		SQLiteStatement statement = database.compileStatement(sql);\n");
+		sb.append("		bindBeanArg(statement, bean);\n");
+		sb.append("		for (int i = ").append(beanArgCount)
+				.append("; i < argCount; i ++) {\n");
+		sb.append("			statement.bindString(i + 1, whereArgs[i - 6]);\n");
+		sb.append("		}\n");
+		sb.append("		return statement;\n	}\n");
+	}
+	
+	private void appendBindBeanArg(StringBuilder sb, String className) {
+		sb.append("\n	private void bindBeanArg(SQLiteStatement statement, ")
+				.append(className).append(" bean) {\n");
+		final Collection<ColumnItem> columns = indexItemMap.values();
 		for (ColumnItem column : columns) {
 			final int bindId = column.index + 1;
 			final SQLDataType sqlType = column.sqlType;
@@ -412,12 +435,12 @@ public class DAOProcessor extends AbstractProcessor {
 			final String fieldName = column.fieldName;
 			if (SQLDataType.BLOB == sqlType) {
 				sb.append("		");
-				sb.append("sqLiteStatement.bindBlob(").append(bindId).append(", bean.")
-						.append(fieldName).append(");\n");
+				sb.append("statement.bindBlob(").append(bindId)
+						.append(", bean.").append(fieldName).append(");\n");
 			} else if (SQLDataType.INTEGER == sqlType) {
 				sb.append("		");
-				sb.append("sqLiteStatement.bindLong(").append(bindId).append(", bean.")
-						.append(fieldName);
+				sb.append("statement.bindLong(").append(bindId)
+						.append(", bean.").append(fieldName);
 				if (TypeKind.BOOLEAN == fieldType) {
 					sb.append(" ? 1 : 0);\n");
 				} else {
@@ -425,18 +448,24 @@ public class DAOProcessor extends AbstractProcessor {
 				}
 			} else if (SQLDataType.REAL == sqlType) {
 				sb.append("		");
-				sb.append("sqLiteStatement.bindDouble(").append(bindId).append(", bean.")
-						.append(fieldName).append(");\n");
+				sb.append("statement.bindDouble(").append(bindId)
+						.append(", bean.").append(fieldName).append(");\n");
 			} else if (SQLDataType.TEXT == sqlType) {
 				sb.append("		");
-				sb.append("sqLiteStatement.bindString(").append(bindId).append(", bean.")
-						.append(fieldName).append(");\n");
+				sb.append("statement.bindString(").append(bindId)
+						.append(", bean.").append(fieldName);
+				if (TypeKind.DECLARED == fieldType) {
+					sb.append(".toString()");
+				} else {
+					sb.append(" + \"\"");
+				}
+				sb.append(");\n");
 			} else if (SQLDataType.NULL == sqlType) {
 				sb.append("		");
-				sb.append("sqLiteStatement.bindNull(").append(bindId).append(");\n");
+				sb.append("statement.bindNull(").append(bindId).append(");\n");
 			}
 		}
-		sb.append("		return sqLiteStatement;\n	}\n");
+		sb.append("	}\n");
 	}
 
 	private void createDAO(String autoAPTPackageName, String daoClassName,
@@ -493,7 +522,7 @@ public class DAOProcessor extends AbstractProcessor {
 			e.printStackTrace();
 		}
 	}
-	
+
 	private void error(String msg, Element e) {
 		processingEnv.getMessager().printMessage(Kind.ERROR, msg, e);
 	}
