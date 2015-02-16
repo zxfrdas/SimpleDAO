@@ -1,6 +1,5 @@
 package com.zt.simpledao.dao;
 
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
@@ -81,16 +80,13 @@ public abstract class SQLite3DAO<T> implements IDAO<T> {
 		mWriteLock.lock();
 		SQLiteStatement statement = mProxy.createInsertSQL(mDatabase, item);
 		try {
-			try {
-				ret = statement.executeInsert();
-			} finally {
-				statement.close();
-			}
+			ret = statement.executeInsert();
 		} catch (SQLiteException e) {
 			e.printStackTrace();
 		} finally {
-			mWriteLock.unlock();
+			statement.close();
 		}
+		mWriteLock.unlock();
 		if (-1 != ret) {
 			return true;
 		}
@@ -132,8 +128,13 @@ public abstract class SQLite3DAO<T> implements IDAO<T> {
 		mDatabase.beginTransaction();
 		try {
 			for (Condition condition : conditions){
-				ret = mDatabase.delete(tableName, condition.getSelection(),
-						condition.getSelectionArgs());
+				SQLiteStatement statement = mProxy.createDeleteSQL(mDatabase,
+						condition.getSelection(), condition.getSelectionArgs());
+				try {
+					ret = statement.executeUpdateDelete();
+				} finally {
+					statement.close();
+				}
 			}
 			mDatabase.setTransactionSuccessful();
 		} catch (SQLiteException e) {
@@ -152,14 +153,16 @@ public abstract class SQLite3DAO<T> implements IDAO<T> {
 	public boolean delete(Condition condition) {
 		long ret = 0;
 		mWriteLock.lock();
+		SQLiteStatement statement = mProxy.createDeleteSQL(mDatabase,
+				condition.getSelection(), condition.getSelectionArgs());
 		try {
-			ret = mDatabase.delete(tableName, condition.getSelection(),
-					condition.getSelectionArgs());
+			ret = statement.executeUpdateDelete();
 		} catch (SQLiteException e) {
 			e.printStackTrace();
 		} finally {
-			mWriteLock.unlock();
+			statement.close();
 		}
+		mWriteLock.unlock();
 		if (0 != ret) {
 			return true;
 		}
@@ -170,11 +173,13 @@ public abstract class SQLite3DAO<T> implements IDAO<T> {
 	public boolean deleteAll() {
 		long ret = 0;
 		mWriteLock.lock();
+		SQLiteStatement statement = mProxy.createDeleteSQL(mDatabase, null, null);
 		try {
-			ret = mDatabase.delete(tableName, null, null);
+			ret = statement.executeUpdateDelete();
 		} catch (SQLiteException e) {
 			e.printStackTrace();
 		} finally {
+			statement.close();
 			mWriteLock.unlock();
 		}
 		if (1 == ret) {
@@ -315,9 +320,7 @@ public abstract class SQLite3DAO<T> implements IDAO<T> {
 		} finally {
 			mReadLock.unlock();
 		}
-		List<T> items = new ArrayList<T>();
-		items = mProxy.convertDatabaseToBean(c);
-		return items;
+		return mProxy.convertDatabaseToBean(c);
 	}
 
 	@Override
@@ -345,9 +348,7 @@ public abstract class SQLite3DAO<T> implements IDAO<T> {
 		} finally {
 			mReadLock.unlock();
 		}
-		List<T> items = new ArrayList<T>();
-		items = mProxy.convertDatabaseToBean(c);
-		return items;
+		return mProxy.convertDatabaseToBean(c);
 	}
 
 	@Override

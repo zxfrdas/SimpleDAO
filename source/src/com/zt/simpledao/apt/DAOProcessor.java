@@ -87,14 +87,19 @@ public class DAOProcessor extends AbstractProcessor {
 		proxyContent.append("	private static final String TABLE_CREATOR = ")
 				.append("\"").append(crateTable(t.name())).append("\"")
 				.append(";\n");
-		proxyContent.append("	private static final HashMap<String, String> CACHE")
+		proxyContent.append(
+				"	private static final HashMap<String, String> CACHE_UPDATE")
+				.append(" = new HashMap<String, String>();\n");
+		proxyContent.append(
+				"	private static final HashMap<String, String> CACHE_DELETE")
 				.append(" = new HashMap<String, String>();\n");
 		// sql string
 		// insert
 		appendInsertSQLString(proxyContent, t.name());
 		// update
 		appendUpdateSQLString(proxyContent, t.name());
-
+		// delete
+		appendDelelteSQLString(proxyContent, t.name());
 		// method
 		appendMethods(proxyContent, element.getSimpleName().toString());
 		// class end
@@ -261,6 +266,11 @@ public class DAOProcessor extends AbstractProcessor {
 		}
 		sb.append("\";\n");
 	}
+	
+	private void appendDelelteSQLString(StringBuilder sb, String tableName) {
+		sb.append("	private static final String DELETE = \"delete from ")
+				.append(tableName).append(" \";\n");
+	}
 
 	private void appendMethods(StringBuilder sb, String className) {
 		sb.append("\n	@Override\n");
@@ -288,6 +298,7 @@ public class DAOProcessor extends AbstractProcessor {
 		appendCreateInsertSQL(sb, className);
 		appendCreateUpdateSQL(sb, className);
 		appendBindBeanArg(sb, className);
+		appendCreateDeleteSQL(sb);
 	}
 
 	private void appendConvertDBToBean(StringBuilder sb, String className) {
@@ -406,14 +417,14 @@ public class DAOProcessor extends AbstractProcessor {
 		sb.append("		final int argCount = (null == whereArgs) ? ")
 				.append(beanArgCount).append(" : ").append("(").append(beanArgCount)
 				.append(" + whereArgs.length);\n");
-		sb.append("		String sql = CACHE.get(whereClause);\n");
+		sb.append("		String sql = CACHE_UPDATE.get(whereClause);\n");
 		sb.append("		if (null == sql) {\n");
 		sb.append("			StringBuilder sb = new StringBuilder(UPDATE);\n");
 		sb.append("			if (!TextUtils.isEmpty(whereClause)) {\n");
 		sb.append("				sb.append(\" where \").append(whereClause);\n");
 		sb.append("			}\n");
 		sb.append("			sql = sb.toString();\n");
-		sb.append("			CACHE.put(whereClause, sql);\n");
+		sb.append("			CACHE_UPDATE.put(whereClause, sql);\n");
 		sb.append("		}\n");
 		sb.append("		SQLiteStatement statement = database.compileStatement(sql);\n");
 		sb.append("		bindBeanArg(statement, bean);\n");
@@ -466,6 +477,29 @@ public class DAOProcessor extends AbstractProcessor {
 			}
 		}
 		sb.append("	}\n");
+	}
+	
+	private void appendCreateDeleteSQL(StringBuilder sb) {
+		sb.append("\n	@Override\n");
+		sb.append("	public SQLiteStatement createDeleteSQL(SQLiteDatabase database,")
+				.append(" String whereClause, String[] whereArgs) {\n");
+		sb.append("		String sql = CACHE_DELETE.get(whereClause);\n");
+		sb.append("		if (null == sql) {\n");
+		sb.append("			StringBuilder sb = new StringBuilder(DELETE);\n");
+		sb.append("			if (!TextUtils.isEmpty(whereClause)) {\n");
+		sb.append("				sb.append(\" where \").append(whereClause);\n");
+		sb.append("			}\n");
+		sb.append("			CACHE_DELETE.put(whereClause, sql = sb.toString());\n");
+		sb.append("		}\n");
+		sb.append("		SQLiteStatement statement = database.compileStatement(sql);\n");
+		sb.append("		if (null != whereArgs) {\n");
+		sb.append("			int index = 0;\n");
+		sb.append("			for (String s : whereArgs) {\n");
+		sb.append("				statement.bindString(index + 1, s);\n");
+		sb.append("				index++;\n");
+		sb.append("			}\n");
+		sb.append("		}\n");
+		sb.append("		return statement;\n	}\n");
 	}
 
 	private void createDAO(String autoAPTPackageName, String daoClassName,
