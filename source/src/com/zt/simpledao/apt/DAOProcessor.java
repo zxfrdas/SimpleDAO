@@ -227,8 +227,8 @@ public class DAOProcessor extends AbstractProcessor {
 		final int count = columns.size();
 		int index = 0;
 		for (ColumnItem column : columns) {
-			final String fieldName = column.fieldName;
-			sb.append(fieldName);
+			final String name = column.columnName;
+			sb.append(name);
 			if (index < (count - 1)) {
 				sb.append(",");
 			} else {
@@ -255,8 +255,8 @@ public class DAOProcessor extends AbstractProcessor {
 		final int count = columns.size();
 		int index = 0;
 		for (ColumnItem column : columns) {
-			final String fieldName = column.fieldName;
-			sb.append(fieldName).append("=?");
+			final String name = column.columnName;
+			sb.append(name).append("=?");
 			if (index < (count - 1)) {
 				sb.append(", ");
 			} else {
