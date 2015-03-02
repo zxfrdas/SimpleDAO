@@ -464,11 +464,12 @@ public class DAOProcessor extends AbstractProcessor {
 			} else if (SQLDataType.TEXT == sqlType) {
 				sb.append("		");
 				sb.append("statement.bindString(").append(bindId)
-						.append(", bean.").append(fieldName);
+						.append(", ");
 				if (TypeKind.DECLARED == fieldType) {
-					sb.append(".toString()");
+					sb.append("null == bean.").append(fieldName).append(" ? \"\" : ");
+					sb.append("bean.").append(fieldName).append(".toString()");
 				} else {
-					sb.append(" + \"\"");
+					sb.append("bean.").append(fieldName).append(" + \"\"");
 				}
 				sb.append(");\n");
 			} else if (SQLDataType.NULL == sqlType) {
