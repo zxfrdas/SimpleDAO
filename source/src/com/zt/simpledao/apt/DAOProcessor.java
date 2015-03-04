@@ -17,16 +17,21 @@ import javax.annotation.processing.SupportedAnnotationTypes;
 import javax.annotation.processing.SupportedSourceVersion;
 import javax.lang.model.SourceVersion;
 import javax.lang.model.element.Element;
+import javax.lang.model.element.ExecutableElement;
 import javax.lang.model.element.TypeElement;
 import javax.lang.model.type.TypeKind;
+import javax.lang.model.util.ElementFilter;
 import javax.tools.Diagnostic.Kind;
 import javax.tools.JavaFileObject;
 
 import com.zt.simpledao.Column;
 import com.zt.simpledao.Database;
+import com.zt.simpledao.PropMethod;
+import com.zt.simpledao.PropMethodType;
 import com.zt.simpledao.SQLDataType;
 import com.zt.simpledao.Table;
 import com.zt.simpledao.bean.ColumnItem;
+import com.zt.simpledao.bean.PropMethodItem;
 
 @SupportedSourceVersion(SourceVersion.RELEASE_6)
 @SupportedAnnotationTypes(value = { "com.zt.simpledao.Column",
@@ -35,11 +40,13 @@ public class DAOProcessor extends AbstractProcessor {
 	private Filer filer;
 	private List<ColumnItem> primaryKeys;
 	private Map<Integer, ColumnItem> indexItemMap;
+	private Map<String, PropMethodItem> propMehtodMap;
 
 	@Override
 	public void init(ProcessingEnvironment env) {
 		filer = env.getFiler();
 		indexItemMap = new HashMap<Integer, ColumnItem>();
+		propMehtodMap = new HashMap<String, PropMethodItem>();
 		super.init(env);
 	}
 
@@ -93,6 +100,27 @@ public class DAOProcessor extends AbstractProcessor {
 		proxyContent.append(
 				"	private static final HashMap<String, String> CACHE_DELETE")
 				.append(" = new HashMap<String, String>();\n");
+		// parse property method
+		List<ExecutableElement> methos = ElementFilter.methodsIn(element
+				.getEnclosedElements());
+		
+		for (ExecutableElement method : methos) {
+			PropMethod prop = method.getAnnotation(PropMethod.class);
+			if (null == prop) {
+				continue;
+			} else {
+				if (null == propMehtodMap.get(prop.name())) {
+					PropMethodItem item = new PropMethodItem();
+					propMehtodMap.put(prop.name(), item);
+				}
+				PropMethodItem item = propMehtodMap.get(prop.name());
+				if (PropMethodType.GET == prop.type()) {
+					item.getterName = method.getSimpleName().toString();
+				} else {
+					item.setterName = method.getSimpleName().toString();
+				}
+			}
+		}
 		// sql string
 		// insert
 		appendInsertSQLString(proxyContent, t.name());
@@ -316,73 +344,71 @@ public class DAOProcessor extends AbstractProcessor {
 			final String fieldName = column.fieldName;
 			final SQLDataType sqlType = column.sqlType;
 			final TypeKind fieldType = column.typeKind;
+			final PropMethodItem propMethod = propMehtodMap.get(fieldName);
+			final String setter = (null == propMethod) ? null
+					: propMethod.setterName;
+			String getValue = "";
+			// 开始构建设值语句。
+			sb.append("					");
+			sb.append("item.");
 			if (SQLDataType.INTEGER == sqlType) {
-				sb.append("					");
 				if (TypeKind.BOOLEAN == fieldType) {
-					sb.append("item.").append(fieldName).append(" = cursor.getInt(")
-							.append(column.index).append(") == 1 ? true : false;\n");
+					getValue = new StringBuilder("cursor.getInt(")
+							.append(column.index).append(") == 1 ? true : false")
+							.toString();
 				} else if (TypeKind.LONG == fieldType) {
-					sb.append("item.").append(fieldName)
-							.append(" = cursor.getLong(").append(column.index)
-							.append(");\n");
+					getValue = new StringBuilder("cursor.getLong(")
+							.append(column.index).append(")").toString();
 				} else if (TypeKind.SHORT == fieldType) {
-					sb.append("item.").append(fieldName)
-							.append(" = cursor.getShort(").append(column.index)
-							.append(");\n");
+					getValue = new StringBuilder("cursor.getShort(")
+							.append(column.index).append(")").toString();
 				} else if (TypeKind.INT == fieldType) {
-					sb.append("item.").append(fieldName).append(" = cursor.getInt(")
-							.append(column.index).append(");\n");
+					getValue = new StringBuilder("cursor.getInt(")
+							.append(column.index).append(")").toString();
 				}
 			} else if (SQLDataType.TEXT == sqlType) {
-				sb.append("					");
 				if (TypeKind.BOOLEAN == fieldType) {
-					sb.append("item.").append(fieldName)
-							.append(" = Boolean.valueOf(cursor.getString(")
-							.append(column.index).append("));\n");
+					getValue = new StringBuilder("Boolean.valueOf(cursor.getString(")
+							.append(column.index).append("))").toString();
 				} else if (TypeKind.DOUBLE == fieldType) {
-					sb.append("item.").append(fieldName)
-							.append(" = Double.valueOf(cursor.getString(")
-							.append(column.index).append("));\n");
+					getValue = new StringBuilder("Double.valueOf(cursor.getString(")
+							.append(column.index).append("))").toString();
 				} else if (TypeKind.FLOAT == fieldType) {
-					sb.append("item.").append(fieldName)
-							.append(" = Float.valueOf(cursor.getString(")
-							.append(column.index).append("));\n");
+					getValue = new StringBuilder("Float.valueOf(cursor.getString(")
+							.append(column.index).append("))").toString();
 				} else if (TypeKind.INT == fieldType) {
-					sb.append("item.").append(fieldName)
-							.append(" = Integer.valueOf(cursor.getString(")
-							.append(column.index).append("));\n");
+					getValue = new StringBuilder("Integer.valueOf(cursor.getString(")
+							.append(column.index).append("))").toString();
 				} else if (TypeKind.LONG == fieldType) {
-					sb.append("item.").append(fieldName)
-							.append(" = Long.valueOf(cursor.getString(")
-							.append(column.index).append("));\n");
+					getValue = new StringBuilder("Long.valueOf(cursor.getString(")
+							.append(column.index).append("))").toString();
 				} else if (TypeKind.SHORT == fieldType) {
-					sb.append("item.").append(fieldName)
-							.append(" = Short.valueOf(cursor.getString(")
-							.append(column.index).append("));\n");
+					getValue = new StringBuilder("Short.valueOf(cursor.getString(")
+							.append(column.index).append("))").toString();
 				} else {
-					sb.append("item.").append(fieldName)
-							.append(" = cursor.getString(").append(column.index)
-							.append(");\n");
+					getValue = new StringBuilder("cursor.getString(")
+							.append(column.index).append(")").toString();
 				}
 			} else if (SQLDataType.NULL == sqlType) {
-				sb.append("					");
-				sb.append("item.").append(fieldName).append(" = null;\n");
+				getValue = new StringBuilder("null").toString();
 			} else if (SQLDataType.BLOB == sqlType) {
-				sb.append("					");
-				sb.append("item.").append(fieldName).append(" = cursor.getBlob(")
-						.append(column.index).append(");\n");
+				getValue = new StringBuilder("cursor.getBlob(").append(column.index)
+						.append(")").toString();
 			} else if (SQLDataType.REAL == sqlType) {
-				sb.append("					");
 				if (TypeKind.FLOAT == fieldType) {
-					sb.append("item.").append(fieldName)
-							.append(" = cursor.getFloat(").append(column.index)
-							.append(");\n");
+					getValue = new StringBuilder("cursor.getFloat(").append(column.index)
+							.append(")").toString();
 				} else if (TypeKind.DOUBLE == fieldType) {
-					sb.append("item.").append(fieldName)
-							.append(" = cursor.getDouble(").append(column.index)
-							.append(");\n");
+					getValue = new StringBuilder("cursor.getDouble(").append(column.index)
+							.append(")").toString();
 				}
 			}
+			if (null == setter) {
+				sb.append(fieldName).append(" = ").append(getValue);
+			} else {
+				sb.append(setter).append("(").append(getValue).append(")");
+			}
+			sb.append(";\n");
 		}
 		sb.append("					");
 		sb.append("beans.add(item);\n");
@@ -430,7 +456,8 @@ public class DAOProcessor extends AbstractProcessor {
 		sb.append("		bindBeanArg(statement, bean);\n");
 		sb.append("		for (int i = ").append(beanArgCount)
 				.append("; i < argCount; i ++) {\n");
-		sb.append("			statement.bindString(i + 1, whereArgs[i - 6]);\n");
+		sb.append("			statement.bindString(i + 1, whereArgs[i - ")
+				.append(beanArgCount).append("]);\n");
 		sb.append("		}\n");
 		sb.append("		return statement;\n	}\n");
 	}
@@ -444,36 +471,37 @@ public class DAOProcessor extends AbstractProcessor {
 			final SQLDataType sqlType = column.sqlType;
 			final TypeKind fieldType = column.typeKind;
 			final String fieldName = column.fieldName;
+			final PropMethodItem propMethod = propMehtodMap.get(fieldName);
+			// 根据是否存在propMethod来决定是直接调用fieldName还是使用getter方法
+			String useName = (null == propMethod || null == propMethod.getterName) ? 
+					fieldName : propMethod.getterName + "()";
+			
+			sb.append("		");
 			if (SQLDataType.BLOB == sqlType) {
-				sb.append("		");
 				sb.append("statement.bindBlob(").append(bindId)
-						.append(", bean.").append(fieldName).append(");\n");
+						.append(", bean.").append(useName).append(");\n");
 			} else if (SQLDataType.INTEGER == sqlType) {
-				sb.append("		");
 				sb.append("statement.bindLong(").append(bindId)
-						.append(", bean.").append(fieldName);
+						.append(", bean.").append(useName);
 				if (TypeKind.BOOLEAN == fieldType) {
 					sb.append(" ? 1 : 0);\n");
 				} else {
 					sb.append(");\n");
 				}
 			} else if (SQLDataType.REAL == sqlType) {
-				sb.append("		");
 				sb.append("statement.bindDouble(").append(bindId)
-						.append(", bean.").append(fieldName).append(");\n");
+						.append(", bean.").append(useName).append(");\n");
 			} else if (SQLDataType.TEXT == sqlType) {
-				sb.append("		");
 				sb.append("statement.bindString(").append(bindId)
 						.append(", ");
 				if (TypeKind.DECLARED == fieldType) {
-					sb.append("null == bean.").append(fieldName).append(" ? \"\" : ");
-					sb.append("bean.").append(fieldName).append(".toString()");
+					sb.append("null == bean.").append(useName).append(" ? \"\" : ");
+					sb.append("bean.").append(useName).append(".toString()");
 				} else {
-					sb.append("bean.").append(fieldName).append(" + \"\"");
+					sb.append("bean.").append(useName).append(" + \"\"");
 				}
 				sb.append(");\n");
 			} else if (SQLDataType.NULL == sqlType) {
-				sb.append("		");
 				sb.append("statement.bindNull(").append(bindId).append(");\n");
 			}
 		}
