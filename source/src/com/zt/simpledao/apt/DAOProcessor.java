@@ -187,32 +187,44 @@ public class DAOProcessor extends AbstractProcessor {
 		}
 		indexItemMap.clear();
 		int index = 0;
-		for (Element element2 : element.getEnclosedElements()) {
-			if (element2.getKind().isField()) {
-				Column c = element2.getAnnotation(Column.class);
-				if (null == c) {
-					error("database must have @Column!", element);
-					return;
-				}
+		boolean isUseUserDefinedIndex = false;
+		int userDefinedIndexTotal = 0;
+		for (Element fieldElement : element.getEnclosedElements()) {
+			if (fieldElement.getKind().isField()) {
+				Column c = fieldElement.getAnnotation(Column.class);
 				ColumnItem column = new ColumnItem();
+				// 用户自定义了一个列index，那么所有列都需要自定义
+				if (-1 != c.index()) {
+					isUseUserDefinedIndex = true;
+					userDefinedIndexTotal ++;
+				}
 				column.index = (-1 == c.index()) ? index : c.index();
-				column.fieldName = element2.getSimpleName().toString();
+				column.fieldName = fieldElement.getSimpleName().toString();
 				column.columnName = (null != c.name() && !c.name().isEmpty()) ? c
 						.name() : column.fieldName;
 				column.sqlType = c.type();
 				if (c.primary()) {
 					primaryKeys.add(column);
 				}
-				column.typeKind = element2.asType().getKind();
+				column.typeKind = fieldElement.asType().getKind();
+				if (TypeKind.BOOLEAN == column.typeKind
+						&& SQLDataType.TEXT == column.sqlType) {
+					warning("Maybe set boolean's SQLDataType=Integer will better",
+							fieldElement);
+				}
 				indexItemMap.put(column.index, column);
 				content.append("	public static final String ")
-						.append(element2.getSimpleName()).append(" = ").append("\"")
+						.append(fieldElement.getSimpleName()).append(" = ").append("\"")
 						.append(column.columnName).append("\";\n");
 				content.append("	public static final int ")
-						.append(element2.getSimpleName()).append("_id")
+						.append(fieldElement.getSimpleName()).append("_id")
 						.append(" = ").append(column.index).append(";\n");
 				index++;
 			}
+		}
+		// check if user defined index right
+		if (isUseUserDefinedIndex && index != userDefinedIndexTotal) {
+			error("if you defined one index you should define all @Column index", element);
 		}
 	}
 
@@ -589,6 +601,10 @@ public class DAOProcessor extends AbstractProcessor {
 
 	private void error(String msg, Element e) {
 		processingEnv.getMessager().printMessage(Kind.ERROR, msg, e);
+	}
+	
+	private void warning(String msg, Element e) {
+		processingEnv.getMessager().printMessage(Kind.WARNING, msg, e);
 	}
 
 }
