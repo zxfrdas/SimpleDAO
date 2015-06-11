@@ -104,6 +104,7 @@ public class DAOProcessor extends AbstractProcessor {
 		List<ExecutableElement> methos = ElementFilter.methodsIn(element
 				.getEnclosedElements());
 		
+		propMehtodMap.clear();
 		for (ExecutableElement method : methos) {
 			PropMethod prop = method.getAnnotation(PropMethod.class);
 			if (null == prop) {
