@@ -15,6 +15,7 @@ import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteException;
 import android.database.sqlite.SQLiteOpenHelper;
+import android.database.sqlite.SQLiteQueryBuilder;
 import android.database.sqlite.SQLiteStatement;
 
 import com.zt.simpledao.bean.IBeanProxy;
@@ -26,10 +27,14 @@ public abstract class SQLite3DAO<T> implements IDAO<T> {
 	private SQLiteDatabase mDatabase;
 	private String tableName;
 	private IBeanProxy<T> mProxy;
+	private String mQueryAll = "SELECT * FROM ";
+	private String mQueryCount = "SELECT COUNT(*) FROM ";
 
 	public SQLite3DAO(Context context, IBeanProxy<T> proxy) {
 		mProxy = proxy;
 		tableName = mProxy.getTableName();
+		mQueryAll = mQueryAll + tableName;
+		mQueryCount = mQueryCount + tableName;
 		final ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
 		mReadLock = lock.readLock();
 		mWriteLock = lock.writeLock();
@@ -274,13 +279,12 @@ public abstract class SQLite3DAO<T> implements IDAO<T> {
 		Cursor c = null;
 		mReadLock.lock();
 		try {
-			c = mDatabase.query(tableName, //table name
-							null, //columns
-							condition.getSelection(), //selection
-							condition.getSelectionArgs(), //selection args
-							condition.getGroupby(), //groupby
-							null, //having
-							condition.getOrderBy()); //orderby
+			String sql = SQLiteQueryBuilder.buildQueryString(false, tableName,
+					null, condition.getSelection(), condition.getGroupby(),
+					null, condition.getOrderBy(), null);
+			
+            c = mDatabase.rawQueryWithFactory(null, sql, condition.getSelectionArgs(),
+            		SQLiteDatabase.findEditTable(tableName), null);
 		} catch (SQLiteException e) {
 			e.printStackTrace();
 		} finally {
@@ -294,7 +298,8 @@ public abstract class SQLite3DAO<T> implements IDAO<T> {
 		Cursor c = null;
 		mReadLock.lock();
 		try {
-			c = mDatabase.rawQuery(sql, selectionArgs);
+			c = mDatabase.rawQueryWithFactory(null, sql, selectionArgs, null,
+					null);
 		} catch (SQLiteException e) {
 			e.printStackTrace();
 		} finally {
@@ -308,13 +313,12 @@ public abstract class SQLite3DAO<T> implements IDAO<T> {
 		Cursor c = null;
 		mReadLock.lock();
 		try {
-			c = mDatabase.query(tableName, //table name
-							null, //columns
-							condition.getSelection(), //selection
-							condition.getSelectionArgs(), //selection args
-							condition.getGroupby(), //groupby
-							null, //having
-							condition.getOrderBy()); //orderby
+			String sql = SQLiteQueryBuilder.buildQueryString(false, tableName,
+					null, condition.getSelection(), condition.getGroupby(),
+					null, condition.getOrderBy(), null);
+
+            c = mDatabase.rawQueryWithFactory(null, sql, condition.getSelectionArgs(),
+            		SQLiteDatabase.findEditTable(tableName), null);
 		} catch (SQLiteException e) {
 			e.printStackTrace();
 		} finally {
@@ -328,7 +332,7 @@ public abstract class SQLite3DAO<T> implements IDAO<T> {
 		Cursor c = null;
 		mReadLock.lock();
 		try {
-			c = mDatabase.query(tableName, null, null, null, null, null, null);
+			c = mDatabase.rawQueryWithFactory(null, mQueryAll, null, null, null);
 		} catch (SQLiteException e) {
 			e.printStackTrace();
 		} finally {
@@ -342,7 +346,7 @@ public abstract class SQLite3DAO<T> implements IDAO<T> {
 		Cursor c = null;
 		mReadLock.lock();
 		try {
-			c = mDatabase.query(tableName, null, null, null, null, null, null);
+			c = mDatabase.rawQueryWithFactory(null, mQueryAll, null, null, null);
 		} catch (SQLiteException e) {
 			e.printStackTrace();
 		} finally {
@@ -354,11 +358,10 @@ public abstract class SQLite3DAO<T> implements IDAO<T> {
 	@Override
 	public int getCount() {
 		int count = 0;
-		String sql = "SELECT COUNT(*) FROM " + tableName;
 		Cursor c = null;
 		mReadLock.lock();
 		try {
-			c = mDatabase.rawQuery(sql, null);
+			c = mDatabase.rawQuery(mQueryCount, null);
 		} catch (SQLiteException e) {
 			e.printStackTrace();
 		} finally {
