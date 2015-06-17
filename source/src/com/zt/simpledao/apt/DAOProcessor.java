@@ -17,8 +17,9 @@ import javax.annotation.processing.SupportedAnnotationTypes;
 import javax.annotation.processing.SupportedSourceVersion;
 import javax.lang.model.SourceVersion;
 import javax.lang.model.element.Element;
-import javax.lang.model.element.ExecutableElement;
+import javax.lang.model.element.Modifier;
 import javax.lang.model.element.TypeElement;
+import javax.lang.model.element.VariableElement;
 import javax.lang.model.type.TypeKind;
 import javax.lang.model.util.ElementFilter;
 import javax.tools.Diagnostic.Kind;
@@ -26,8 +27,6 @@ import javax.tools.JavaFileObject;
 
 import com.zt.simpledao.Column;
 import com.zt.simpledao.Database;
-import com.zt.simpledao.PropMethod;
-import com.zt.simpledao.PropMethodType;
 import com.zt.simpledao.SQLDataType;
 import com.zt.simpledao.Table;
 import com.zt.simpledao.bean.ColumnItem;
@@ -40,13 +39,11 @@ public class DAOProcessor extends AbstractProcessor {
 	private Filer filer;
 	private List<ColumnItem> primaryKeys;
 	private Map<Integer, ColumnItem> indexItemMap;
-	private Map<String, PropMethodItem> propMehtodMap;
-
+	
 	@Override
 	public void init(ProcessingEnvironment env) {
 		filer = env.getFiler();
 		indexItemMap = new HashMap<Integer, ColumnItem>();
-		propMehtodMap = new HashMap<String, PropMethodItem>();
 		super.init(env);
 	}
 
@@ -100,28 +97,6 @@ public class DAOProcessor extends AbstractProcessor {
 		proxyContent.append(
 				"	private static final HashMap<String, String> CACHE_DELETE")
 				.append(" = new HashMap<String, String>();\n");
-		// parse property method
-		List<ExecutableElement> methos = ElementFilter.methodsIn(element
-				.getEnclosedElements());
-		
-		propMehtodMap.clear();
-		for (ExecutableElement method : methos) {
-			PropMethod prop = method.getAnnotation(PropMethod.class);
-			if (null == prop) {
-				continue;
-			} else {
-				if (null == propMehtodMap.get(prop.name())) {
-					PropMethodItem item = new PropMethodItem();
-					propMehtodMap.put(prop.name(), item);
-				}
-				PropMethodItem item = propMehtodMap.get(prop.name());
-				if (PropMethodType.GET == prop.type()) {
-					item.getterName = method.getSimpleName().toString();
-				} else {
-					item.setterName = method.getSimpleName().toString();
-				}
-			}
-		}
 		// sql string
 		// insert
 		appendInsertSQLString(proxyContent, t.name());
@@ -189,38 +164,56 @@ public class DAOProcessor extends AbstractProcessor {
 		int index = 0;
 		boolean isUseUserDefinedIndex = false;
 		int userDefinedIndexTotal = 0;
-		for (Element fieldElement : element.getEnclosedElements()) {
-			if (fieldElement.getKind().isField()) {
-				Column c = fieldElement.getAnnotation(Column.class);
-				ColumnItem column = new ColumnItem();
-				// 用户自定义了一个列index，那么所有列都需要自定义
-				if (-1 != c.index()) {
-					isUseUserDefinedIndex = true;
-					userDefinedIndexTotal ++;
-				}
-				column.index = (-1 == c.index()) ? index : c.index();
-				column.fieldName = fieldElement.getSimpleName().toString();
-				column.columnName = (null != c.name() && !c.name().isEmpty()) ? c
-						.name() : column.fieldName;
-				column.sqlType = c.type();
-				if (c.primary()) {
-					primaryKeys.add(column);
-				}
-				column.typeKind = fieldElement.asType().getKind();
-				if (TypeKind.BOOLEAN == column.typeKind
-						&& SQLDataType.TEXT == column.sqlType) {
-					warning("Maybe set boolean's SQLDataType=Integer will better",
-							fieldElement);
-				}
-				indexItemMap.put(column.index, column);
-				content.append("	public static final String ")
-						.append(fieldElement.getSimpleName()).append(" = ").append("\"")
-						.append(column.columnName).append("\";\n");
-				content.append("	public static final int ")
-						.append(fieldElement.getSimpleName()).append("_id")
-						.append(" = ").append(column.index).append(";\n");
-				index++;
+		List<VariableElement> variables = ElementFilter.fieldsIn(element
+				.getEnclosedElements());
+		for (VariableElement fieldElement : variables) {
+			warning(fieldElement.toString(), fieldElement);
+			Column c = fieldElement.getAnnotation(Column.class);
+			ColumnItem column = new ColumnItem();
+			// 用户自定义了一个列index，那么所有列都需要自定义
+			if (-1 != c.index()) {
+				isUseUserDefinedIndex = true;
+				userDefinedIndexTotal ++;
 			}
+			column.index = (-1 == c.index()) ? index : c.index();
+			column.fieldName = fieldElement.getSimpleName().toString();
+			column.columnName = (null != c.name() && !c.name().isEmpty()) ? c
+					.name() : column.fieldName;
+			column.sqlType = c.type();
+			if (c.primary()) {
+				primaryKeys.add(column);
+			}
+			column.typeKind = fieldElement.asType().getKind();
+			Set<Modifier> modifiers = fieldElement.getModifiers();
+			if (modifiers.contains(Modifier.PRIVATE)) {
+				// field is private, need getter&setter
+				column.getterSetter = new PropMethodItem();
+				final String old = column.fieldName;
+				final String firstStr = new String(new char[]{old.charAt(0)});
+				final String otherStr = old.substring(1);
+				final String upperFirst = firstStr.toUpperCase();
+				final String useName = upperFirst + otherStr;
+				column.getterSetter.setterName = "set" + useName;
+				if (TypeKind.BOOLEAN == column.typeKind) {
+					column.getterSetter.getterName = "is" + useName;
+				} else {
+					column.getterSetter.getterName = "get" + useName;
+				}
+			}
+			
+			if (TypeKind.BOOLEAN == column.typeKind
+					&& SQLDataType.TEXT == column.sqlType) {
+				warning("Maybe set boolean's SQLDataType=Integer will better",
+						fieldElement);
+			}
+			indexItemMap.put(column.index, column);
+			content.append("	public static final String ")
+					.append(fieldElement.getSimpleName()).append(" = ")
+					.append("\"").append(column.columnName).append("\";\n");
+			content.append("	public static final int ")
+					.append(fieldElement.getSimpleName()).append("_id")
+					.append(" = ").append(column.index).append(";\n");
+			index++;
 		}
 		// check if user defined index right
 		if (isUseUserDefinedIndex && index != userDefinedIndexTotal) {
@@ -247,7 +240,7 @@ public class DAOProcessor extends AbstractProcessor {
 						ColumnItem primary = primaryKeys.get(pri);
 						sb.append(primary.columnName);
 						if (pri != (primaryTotal - 1)) {
-							// 非最后一个
+							// 多个主键之间用逗号隔开
 							sb.append(",");
 						}
 					}
@@ -357,7 +350,7 @@ public class DAOProcessor extends AbstractProcessor {
 			final String fieldName = column.fieldName;
 			final SQLDataType sqlType = column.sqlType;
 			final TypeKind fieldType = column.typeKind;
-			final PropMethodItem propMethod = propMehtodMap.get(fieldName);
+			final PropMethodItem propMethod = column.getterSetter;
 			final String setter = (null == propMethod) ? null
 					: propMethod.setterName;
 			String getValue = "";
@@ -484,7 +477,7 @@ public class DAOProcessor extends AbstractProcessor {
 			final SQLDataType sqlType = column.sqlType;
 			final TypeKind fieldType = column.typeKind;
 			final String fieldName = column.fieldName;
-			final PropMethodItem propMethod = propMehtodMap.get(fieldName);
+			final PropMethodItem propMethod = column.getterSetter;
 			// 根据是否存在propMethod来决定是直接调用fieldName还是使用getter方法
 			String useName = (null == propMethod || null == propMethod.getterName) ? 
 					fieldName : propMethod.getterName + "()";
