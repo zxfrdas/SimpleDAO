@@ -32,7 +32,7 @@ import com.zt.simpledao.Table;
 import com.zt.simpledao.bean.ColumnItem;
 import com.zt.simpledao.bean.PropMethodItem;
 
-@SupportedSourceVersion(SourceVersion.RELEASE_6)
+@SupportedSourceVersion(SourceVersion.RELEASE_8)
 @SupportedAnnotationTypes(value = { "com.zt.simpledao.Column",
 		"com.zt.simpledao.Database", "com.zt.simpledao.Table" })
 public class DAOProcessor extends AbstractProcessor {
@@ -112,7 +112,7 @@ public class DAOProcessor extends AbstractProcessor {
 		JavaFileObject file = null;
 		Writer writer = null;
 		try {
-			file = filer.createSourceFile(autoAPTPackageName + "/" + proxyClassName,
+			file = filer.createSourceFile(autoAPTPackageName + "." + proxyClassName,
 					element);
 			if (null != file) {
 				writer = file.openWriter();
@@ -584,7 +584,7 @@ public class DAOProcessor extends AbstractProcessor {
 		// output
 		JavaFileObject file = null;
 		try {
-			file = filer.createSourceFile(autoAPTPackageName + "/" + daoClassName,
+			file = filer.createSourceFile(autoAPTPackageName + "." + daoClassName,
 					element);
 			file.openWriter().append(daoContent).close();
 		} catch (IOException e) {

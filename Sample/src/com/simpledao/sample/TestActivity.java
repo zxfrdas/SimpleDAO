@@ -68,11 +68,11 @@ public class TestActivity extends Activity {
 	
 	private void update() {
 		// 更新一个
-		daoPublic.update(item, condition);
+//		daoPublic.update(item, condition);
 		// 更新多个，同样条件
-		daoPublic.update(items, condition);
+//		daoPublic.update(items, condition);
 		// 更新多个，每个都有自己的条件
-		daoPublic.update(updates);
+//		daoPublic.update(updates);
 		// 比较懒，就不写完了。。
 	}
 	
