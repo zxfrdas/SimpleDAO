@@ -50,7 +50,7 @@
 
 ### step 2 ###
 - 打开Module的build.grade，文件开头加上依赖 apply plugin: 'android-apt'
-- 加入你要使用的带APT注解处理器的jar包：apt files(libs/SimpleDAO.jar)
+- 依赖中加入你要使用的带APT注解处理器的jar包：apt files(libs/SimpleDAO.jar)
 
 ### 配置完毕开始使用 ###
 ```java
