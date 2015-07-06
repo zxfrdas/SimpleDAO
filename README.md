@@ -43,9 +43,16 @@
 - 右键工程--properties--Java Compiler--Annotation Processing
 - 在该页面下，勾选所有Enable项（一共三项）。Generated source directory是设置APT自动生成的代码所在文件夹，可以自由指定。
 - 进入Factory Path项，勾选Enable项，点击Add JARs...选择项目libs目录下的SimpleDAO.jar文件。之后点击Advanced...应该在弹出窗口中看到`com.zt.simpledao.apt.DAOProcessor`，这就是SimpleDAO提供的APT处理器，点击选中后OK即可
-- 至此配置完成
 
-### step 3 ###
+## Android Studio ##
+### step 1 ###
+- 打开Android Studio里Project的build.gradle，加入此行：classpath 'com.neenbedankt.gradle.plugins:android-apt:1.+'
+
+### step 2 ###
+- 打开Module的build.grade，文件开头加上依赖 apply plugin: 'android-apt'
+- 加入你要使用的带APT注解处理器的jar包：apt files(libs/SimpleDAO.jar)
+
+### 配置完毕开始使用 ###
 ```java
 // 假设已经写好了一个要映射为数据库的类并加上了正确注解
 // APT会自动生成两个文件TestBeanDAO和TestBeanProxy
