@@ -6,7 +6,7 @@ import com.zt.simpledao.SQLDataType;
 import com.zt.simpledao.Table;
 
 //此处指定对应的数据库名称、表名、数据库版本
-@Database(name = "private.db", version = 0)
+@Database(name = "private.db", version = 1)
 @Table(name = "TestBeanPrivate")
 public class TestBeanPrivate {
 	// 指定number字段在数据库中对应列名为默认（即字段名），数据类型为Integer，是主键
