@@ -76,6 +76,10 @@ public class DAOProcessor extends AbstractProcessor {
 		appendBeanProxyColumnConst(element, proxyContent);
 		// field database
 		Database db = element.getAnnotation(Database.class);
+		if (db.version() < 1) {
+			error("database version must > 1", element);
+			return;
+		}
 		proxyContent.append("	private static final String DATABASE_NAME = ")
 				.append("\"").append(db.name()).append("\"").append(";\n");
 		proxyContent.append("	private static final int VERSION = ")
@@ -167,7 +171,6 @@ public class DAOProcessor extends AbstractProcessor {
 		List<VariableElement> variables = ElementFilter.fieldsIn(element
 				.getEnclosedElements());
 		for (VariableElement fieldElement : variables) {
-			warning(fieldElement.toString(), fieldElement);
 			Column c = fieldElement.getAnnotation(Column.class);
 			ColumnItem column = new ColumnItem();
 			// 用户自定义了一个列index，那么所有列都需要自定义
@@ -185,8 +188,8 @@ public class DAOProcessor extends AbstractProcessor {
 			}
 			column.typeKind = fieldElement.asType().getKind();
 			Set<Modifier> modifiers = fieldElement.getModifiers();
-			if (modifiers.contains(Modifier.PRIVATE)) {
-				// field is private, need getter&setter
+			if (!modifiers.contains(Modifier.PUBLIC)) {
+				// field isn't public, need getter&setter
 				column.getterSetter = new PropMethodItem();
 				final String old = column.fieldName;
 				final String firstStr = new String(new char[]{old.charAt(0)});
@@ -224,7 +227,7 @@ public class DAOProcessor extends AbstractProcessor {
 	private String crateTable(String table) {
 		// Create table xxx (column type, column type, primary key (column));
 		StringBuilder sb = new StringBuilder();
-		sb.append("create table ").append(table).append("(");
+		sb.append("create table if not exists ").append(table).append("(");
 		final int total = indexItemMap.size();
 		// 转换为了按Column中声明的index顺序构造sql语句。
 		for (int i = 0; i < total; i++) {
