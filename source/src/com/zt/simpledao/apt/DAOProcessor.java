@@ -5,6 +5,7 @@ import java.io.Writer;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -13,8 +14,6 @@ import javax.annotation.processing.AbstractProcessor;
 import javax.annotation.processing.Filer;
 import javax.annotation.processing.ProcessingEnvironment;
 import javax.annotation.processing.RoundEnvironment;
-import javax.annotation.processing.SupportedAnnotationTypes;
-import javax.annotation.processing.SupportedSourceVersion;
 import javax.lang.model.SourceVersion;
 import javax.lang.model.element.Element;
 import javax.lang.model.element.Modifier;
@@ -32,9 +31,6 @@ import com.zt.simpledao.Table;
 import com.zt.simpledao.bean.ColumnItem;
 import com.zt.simpledao.bean.PropMethodItem;
 
-@SupportedSourceVersion(SourceVersion.RELEASE_8)
-@SupportedAnnotationTypes(value = { "com.zt.simpledao.Column",
-		"com.zt.simpledao.Database", "com.zt.simpledao.Table" })
 public class DAOProcessor extends AbstractProcessor {
 	private Filer filer;
 	private List<ColumnItem> primaryKeys;
@@ -45,6 +41,20 @@ public class DAOProcessor extends AbstractProcessor {
 		filer = env.getFiler();
 		indexItemMap = new HashMap<Integer, ColumnItem>();
 		super.init(env);
+	}
+
+	@Override
+	public Set<String> getSupportedAnnotationTypes() {
+		Set<String> annotataions = new LinkedHashSet<String>();
+        annotataions.add("com.zt.simpledao.Column");
+        annotataions.add("com.zt.simpledao.Database");
+        annotataions.add("com.zt.simpledao.Table");
+        return annotataions;
+	}
+
+	@Override
+	public SourceVersion getSupportedSourceVersion() {
+		return SourceVersion.latestSupported();
 	}
 
 	@SuppressWarnings("unchecked")
