@@ -35,11 +35,14 @@ public class DAOProcessor extends AbstractProcessor {
 	private Filer filer;
 	private List<ColumnItem> primaryKeys;
 	private Map<Integer, ColumnItem> indexItemMap;
+	private Map<String, Map<String, String>> databases;
 	
 	@Override
 	public void init(ProcessingEnvironment env) {
 		filer = env.getFiler();
+		primaryKeys = new ArrayList<ColumnItem>();
 		indexItemMap = new HashMap<Integer, ColumnItem>();
+		databases = new HashMap<String, Map<String, String>>();
 		super.init(env);
 	}
 
@@ -63,6 +66,7 @@ public class DAOProcessor extends AbstractProcessor {
 			RoundEnvironment roundEnv) {
 		Set<TypeElement> dbfiles = (Set<TypeElement>) roundEnv
 				.getElementsAnnotatedWith(Database.class);
+		processSameNameDatabase(dbfiles);
 		for (TypeElement dbfile : dbfiles) {
 			// init database file path
 			String packageName = dbfile.toString().substring(0,
@@ -75,6 +79,85 @@ public class DAOProcessor extends AbstractProcessor {
 			createDAO(autoAPTPackageName, daoClassName, proxyClassName, dbfile);
 		}
 		return true;
+	}
+	
+	private void processSameNameDatabase(Set<TypeElement> dbfiles) {
+		databases.clear();
+		for (TypeElement dbfile : dbfiles) {
+			Database db = dbfile.getAnnotation(Database.class);
+			Table t = dbfile.getAnnotation(Table.class);
+			if (null == t) {
+				break;
+			}
+			processIndexItems(dbfile);
+			// 判断是否已有同名database
+			boolean isDatabaseExisted = databases.containsKey(db.name());
+			if (!isDatabaseExisted) {
+				Map<String, String> tables = new HashMap<String, String>();
+				tables.put(t.name(), createTable(t.name()));
+				databases.put(db.name(), tables);
+			} else {
+				Map<String, String> tables = databases.get(db.name());
+				tables.put(t.name(), createTable(t.name()));
+				databases.put(db.name(), tables);
+			}
+		}
+	}
+	
+	private void processIndexItems(Element element) {
+		primaryKeys.clear();
+		indexItemMap.clear();
+		int index = 0;
+		boolean isUseUserDefinedIndex = false;
+		int userDefinedIndexTotal = 0;
+		List<VariableElement> variables = ElementFilter.fieldsIn(element
+				.getEnclosedElements());
+		for (VariableElement fieldElement : variables) {
+			Column c = fieldElement.getAnnotation(Column.class);
+			ColumnItem column = new ColumnItem();
+			// 用户自定义了一个列index，那么所有列都需要自定义
+			if (-1 != c.index()) {
+				isUseUserDefinedIndex = true;
+				userDefinedIndexTotal ++;
+			}
+			column.index = (-1 == c.index()) ? index : c.index();
+			column.fieldName = fieldElement.getSimpleName().toString();
+			column.columnName = (null != c.name() && !c.name().isEmpty()) ? c
+					.name() : column.fieldName;
+			column.sqlType = c.type();
+			if (c.primary()) {
+				primaryKeys.add(column);
+			}
+			column.typeKind = fieldElement.asType().getKind();
+			Set<Modifier> modifiers = fieldElement.getModifiers();
+			if (!modifiers.contains(Modifier.PUBLIC)) {
+				// field isn't public, need getter&setter
+				column.getterSetter = new PropMethodItem();
+				final String old = column.fieldName;
+				final String firstStr = new String(new char[]{old.charAt(0)});
+				final String otherStr = old.substring(1);
+				final String upperFirst = firstStr.toUpperCase();
+				final String useName = upperFirst + otherStr;
+				column.getterSetter.setterName = "set" + useName;
+				if (TypeKind.BOOLEAN == column.typeKind) {
+					column.getterSetter.getterName = "is" + useName;
+				} else {
+					column.getterSetter.getterName = "get" + useName;
+				}
+			}
+			
+			if (TypeKind.BOOLEAN == column.typeKind
+					&& SQLDataType.TEXT == column.sqlType) {
+				warning("Maybe set boolean's SQLDataType=Integer will better",
+						fieldElement);
+			}
+			indexItemMap.put(column.index, column);
+			index++;
+		}
+		// check if user defined index right
+		if (isUseUserDefinedIndex && index != userDefinedIndexTotal) {
+			error("if you defined one index you should define all @Column index", element);
+		}
 	}
 
 	private void createBeanProxy(String autoAPTPackageName, String proxyClassName,
@@ -94,6 +177,7 @@ public class DAOProcessor extends AbstractProcessor {
 				.append("\"").append(db.name()).append("\"").append(";\n");
 		proxyContent.append("	private static final int VERSION = ")
 				.append(db.version()).append(";\n");
+		
 		// field table
 		Table t = element.getAnnotation(Table.class);
 		if (null == t) {
@@ -102,9 +186,19 @@ public class DAOProcessor extends AbstractProcessor {
 		}
 		proxyContent.append("	private static final String TABLE = ").append("\"")
 				.append(t.name()).append("\"").append(";\n");
-		proxyContent.append("	private static final String TABLE_CREATOR = ")
-				.append("\"").append(crateTable(t.name())).append("\"")
-				.append(";\n");
+		final Collection<String> creators = databases.get(db.name()).values();
+		final int size = creators.size();
+		int index = 0;
+		proxyContent.append("	private static final String[] TABLE_CREATOR = ")
+				.append("new String[]{");
+		for (String s : creators) {
+			proxyContent.append(s);
+			if ((size - 1) != index) {
+				proxyContent.append(", ");
+			}
+			index ++;
+		}
+		proxyContent.append("};\n");
 		proxyContent.append(
 				"	private static final HashMap<String, String> CACHE_UPDATE")
 				.append(" = new HashMap<String, String>();\n");
@@ -169,74 +263,22 @@ public class DAOProcessor extends AbstractProcessor {
 	}
 
 	private void appendBeanProxyColumnConst(Element element, StringBuilder content) {
-		if (null == primaryKeys) {
-			primaryKeys = new ArrayList<ColumnItem>();
-		} else {
-			primaryKeys.clear();
-		}
-		indexItemMap.clear();
-		int index = 0;
-		boolean isUseUserDefinedIndex = false;
-		int userDefinedIndexTotal = 0;
-		List<VariableElement> variables = ElementFilter.fieldsIn(element
-				.getEnclosedElements());
-		for (VariableElement fieldElement : variables) {
-			Column c = fieldElement.getAnnotation(Column.class);
-			ColumnItem column = new ColumnItem();
-			// 用户自定义了一个列index，那么所有列都需要自定义
-			if (-1 != c.index()) {
-				isUseUserDefinedIndex = true;
-				userDefinedIndexTotal ++;
-			}
-			column.index = (-1 == c.index()) ? index : c.index();
-			column.fieldName = fieldElement.getSimpleName().toString();
-			column.columnName = (null != c.name() && !c.name().isEmpty()) ? c
-					.name() : column.fieldName;
-			column.sqlType = c.type();
-			if (c.primary()) {
-				primaryKeys.add(column);
-			}
-			column.typeKind = fieldElement.asType().getKind();
-			Set<Modifier> modifiers = fieldElement.getModifiers();
-			if (!modifiers.contains(Modifier.PUBLIC)) {
-				// field isn't public, need getter&setter
-				column.getterSetter = new PropMethodItem();
-				final String old = column.fieldName;
-				final String firstStr = new String(new char[]{old.charAt(0)});
-				final String otherStr = old.substring(1);
-				final String upperFirst = firstStr.toUpperCase();
-				final String useName = upperFirst + otherStr;
-				column.getterSetter.setterName = "set" + useName;
-				if (TypeKind.BOOLEAN == column.typeKind) {
-					column.getterSetter.getterName = "is" + useName;
-				} else {
-					column.getterSetter.getterName = "get" + useName;
-				}
-			}
-			
-			if (TypeKind.BOOLEAN == column.typeKind
-					&& SQLDataType.TEXT == column.sqlType) {
-				warning("Maybe set boolean's SQLDataType=Integer will better",
-						fieldElement);
-			}
-			indexItemMap.put(column.index, column);
+		processIndexItems(element);
+		for (Map.Entry<Integer, ColumnItem> entry : indexItemMap.entrySet()) {
+			ColumnItem column = entry.getValue();
 			content.append("	public static final String ")
-					.append(fieldElement.getSimpleName()).append(" = ")
+					.append(column.fieldName).append(" = ")
 					.append("\"").append(column.columnName).append("\";\n");
 			content.append("	public static final int ")
-					.append(fieldElement.getSimpleName()).append("_id")
+					.append(column.fieldName).append("_id")
 					.append(" = ").append(column.index).append(";\n");
-			index++;
-		}
-		// check if user defined index right
-		if (isUseUserDefinedIndex && index != userDefinedIndexTotal) {
-			error("if you defined one index you should define all @Column index", element);
 		}
 	}
 
-	private String crateTable(String table) {
+	private String createTable(String table) {
 		// Create table xxx (column type, column type, primary key (column));
 		StringBuilder sb = new StringBuilder();
+		sb.append("\"");
 		sb.append("create table if not exists ").append(table).append("(");
 		final int total = indexItemMap.size();
 		// 转换为了按Column中声明的index顺序构造sql语句。
@@ -264,6 +306,7 @@ public class DAOProcessor extends AbstractProcessor {
 				sb.append(", ");
 			}
 		}
+		sb.append("\"");
 		return sb.toString();
 	}
 
@@ -333,7 +376,7 @@ public class DAOProcessor extends AbstractProcessor {
 				"		return TABLE;\n	}\n");
 
 		sb.append("\n	@Override\n");
-		sb.append("	public String getTableCreator() {\n").append(
+		sb.append("	public String[] getTableCreator() {\n").append(
 				"		return TABLE_CREATOR;\n	}\n");
 
 		sb.append("\n	@Override\n");
@@ -587,11 +630,14 @@ public class DAOProcessor extends AbstractProcessor {
 		// override
 		daoContent.append("\n	@Override");
 		daoContent
-				.append("\n	protected void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion, IBeanProxy")
-				.append("<").append(element.getSimpleName()).append("> proxy) {\n");
-		daoContent
-				.append("		db.execSQL(\"DROP TABLE IF EXISTS \" + proxy.getTableName());\n");
-		daoContent.append("		db.execSQL(proxy.getTableCreator());\n	}\n");
+				.append("\n	protected void onCusUpgrade(SQLiteDatabase db, int oldVersion, int newVersion")
+				.append(") {\n");
+		
+		String dbName = element.getAnnotation(Database.class).name();
+		String tableName = element.getAnnotation(Table.class).name();
+		daoContent.append("		db.execSQL(\"DROP TABLE IF EXISTS " + tableName + "\");\n");
+		String tableCreator = databases.get(dbName).get(tableName);
+		daoContent.append("		db.execSQL(" + tableCreator + ");\n	}\n");
 		// end
 		daoContent.append("\n}");
 		// output

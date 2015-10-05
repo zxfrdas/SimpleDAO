@@ -97,20 +97,20 @@ public interface IDAO<T> {
 	/**
 	 * 数据库查询操作
 	 * 
-	 * @param condition
-	 *            操作的条件
-	 * @return 所有符合条件的数据类
-	 */
-	List<T> query(Condition condition);
-	
-	/**
-	 * 数据库查询操作
-	 * 
 	 * @param sql
 	 *            需要执行的sql语句
 	 * @return 所有符合条件的数据类
 	 */
 	Cursor query(String sql, String[] selectionArgs);
+	
+	/**
+	 * 数据库查询操作
+	 * 
+	 * @param condition
+	 *            操作的条件
+	 * @return 所有符合条件的数据类
+	 */
+	List<T> query(Condition condition);
 	
 	/**
 	 * 数据库查询操作

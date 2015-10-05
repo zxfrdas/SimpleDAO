@@ -43,41 +43,21 @@ public abstract class SQLite3DAO<T> implements IDAO<T> {
 
 			@Override
 			public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
-				SQLite3DAO.this.onUpgrade(db, oldVersion, newVersion, mProxy);
+				SQLite3DAO.this.onCusUpgrade(db, oldVersion, newVersion);
 			}
 
 			@Override
 			public void onCreate(SQLiteDatabase db) {
-				db.execSQL(mProxy.getTableCreator());
+				String[] creators = mProxy.getTableCreator();
+				for (String s : creators) {
+					db.execSQL(s);
+				}
 			}
 		}.getWritableDatabase();
 	}
 
-	protected abstract void onUpgrade(SQLiteDatabase db, int oldVersion,
-			int newVersion, IBeanProxy<T> proxy);
-
-	@Override
-	public boolean insert(List<ContentValues> valuesList) {
-		long ret = -1;
-		mWriteLock.lock();
-		mDatabase.beginTransaction();
-		try {
-			for (ContentValues v : valuesList) {
-				ret = mDatabase.insert(tableName, null, v);
-			}
-			mDatabase.setTransactionSuccessful();
-		} catch (SQLiteException e) {
-			e.printStackTrace();
-			ret = -1;
-		} finally {
-			mDatabase.endTransaction();
-			mWriteLock.unlock();
-		}
-		if (-1 != ret) {
-			return true;
-		}
-		return false;
-	}
+	protected abstract void onCusUpgrade(SQLiteDatabase db, int oldVersion,
+			int newVersion);
 	
 	@Override
 	public boolean insert(T item) {
@@ -127,6 +107,49 @@ public abstract class SQLite3DAO<T> implements IDAO<T> {
 	}
 
 	@Override
+	public boolean insert(List<ContentValues> valuesList) {
+		long ret = -1;
+		mWriteLock.lock();
+		mDatabase.beginTransaction();
+		try {
+			for (ContentValues v : valuesList) {
+				ret = mDatabase.insert(tableName, null, v);
+			}
+			mDatabase.setTransactionSuccessful();
+		} catch (SQLiteException e) {
+			e.printStackTrace();
+			ret = -1;
+		} finally {
+			mDatabase.endTransaction();
+			mWriteLock.unlock();
+		}
+		if (-1 != ret) {
+			return true;
+		}
+		return false;
+	}
+	
+	@Override
+	public boolean delete(Condition condition) {
+		long ret = 0;
+		mWriteLock.lock();
+		SQLiteStatement statement = mProxy.createDeleteSQL(mDatabase,
+				condition.getSelection(), condition.getSelectionArgs());
+		try {
+			ret = statement.executeUpdateDelete();
+		} catch (SQLiteException e) {
+			e.printStackTrace();
+		} finally {
+			statement.close();
+		}
+		mWriteLock.unlock();
+		if (0 != ret) {
+			return true;
+		}
+		return false;
+	}
+	
+	@Override
 	public boolean delete(Collection<Condition> conditions) {
 		long ret = 0;
 		mWriteLock.lock();
@@ -153,12 +176,31 @@ public abstract class SQLite3DAO<T> implements IDAO<T> {
 		}
 		return false;
 	}
-	
+
 	@Override
-	public boolean delete(Condition condition) {
+	public boolean deleteAll() {
 		long ret = 0;
 		mWriteLock.lock();
-		SQLiteStatement statement = mProxy.createDeleteSQL(mDatabase,
+		SQLiteStatement statement = mProxy.createDeleteSQL(mDatabase, null, null);
+		try {
+			ret = statement.executeUpdateDelete();
+		} catch (SQLiteException e) {
+			e.printStackTrace();
+		} finally {
+			statement.close();
+			mWriteLock.unlock();
+		}
+		if (0 != ret) {
+			return true;
+		}
+		return false;
+	}
+
+	@Override
+	public boolean update(T item, Condition condition) {
+		long ret = 0;
+		mWriteLock.lock();
+		SQLiteStatement statement = mProxy.createUpdateSQL(mDatabase, item,
 				condition.getSelection(), condition.getSelectionArgs());
 		try {
 			ret = statement.executeUpdateDelete();
@@ -175,48 +217,8 @@ public abstract class SQLite3DAO<T> implements IDAO<T> {
 	}
 
 	@Override
-	public boolean deleteAll() {
-		long ret = 0;
-		mWriteLock.lock();
-		SQLiteStatement statement = mProxy.createDeleteSQL(mDatabase, null, null);
-		try {
-			ret = statement.executeUpdateDelete();
-		} catch (SQLiteException e) {
-			e.printStackTrace();
-		} finally {
-			statement.close();
-			mWriteLock.unlock();
-		}
-		if (1 == ret) {
-			return true;
-		}
-		return false;
-	}
-
-	@Override
-	public boolean update(T item, Condition condition) {
-		long ret = -1;
-		mWriteLock.lock();
-		SQLiteStatement statement = mProxy.createUpdateSQL(mDatabase, item,
-				condition.getSelection(), condition.getSelectionArgs());
-		try {
-			ret = statement.executeUpdateDelete();
-		} catch (SQLiteException e) {
-			e.printStackTrace();
-			ret = -1;
-		} finally {
-			statement.close();
-		}
-		mWriteLock.unlock();
-		if (-1 != ret) {
-			return true;
-		}
-		return false;
-	}
-
-	@Override
 	public boolean update(Collection<T> items, Condition condition) {
-		long ret = -1;
+		long ret = 0;
 		mWriteLock.lock();
 		mDatabase.beginTransaction();
 		try {
@@ -232,12 +234,11 @@ public abstract class SQLite3DAO<T> implements IDAO<T> {
 			mDatabase.setTransactionSuccessful();
 		} catch (SQLiteException e) {
 			e.printStackTrace();
-			ret = -1;
 		} finally {
 			mDatabase.endTransaction();
 			mWriteLock.unlock();
 		}
-		if (-1 != ret) {
+		if (0 != ret) {
 			return true;
 		}
 		return false;
@@ -245,7 +246,7 @@ public abstract class SQLite3DAO<T> implements IDAO<T> {
 
 	@Override
 	public boolean update(Map<T, Condition> updates) {
-		long ret = -1;
+		long ret = 0;
 		mWriteLock.lock();
 		mDatabase.beginTransaction();
 		try {
@@ -263,15 +264,35 @@ public abstract class SQLite3DAO<T> implements IDAO<T> {
 			mDatabase.setTransactionSuccessful();
 		} catch (SQLiteException e) {
 			e.printStackTrace();
-			ret = -1;
 		} finally {
 			mDatabase.endTransaction();
 			mWriteLock.unlock();
 		}
-		if (-1 != ret) {
+		if (0 != ret) {
 			return true;
 		}
 		return false;
+	}
+	
+	@Override
+	public Cursor query(String sql, String[] selectionArgs) {
+		Cursor c = null;
+		mReadLock.lock();
+		try {
+			c = mDatabase.rawQueryWithFactory(null, sql, selectionArgs, null,
+					null);
+		} catch (SQLiteException e) {
+			e.printStackTrace();
+		} finally {
+			mReadLock.unlock();
+		}
+		return c;
+	}
+	
+	@Override
+	public List<T> query(Condition condition) {
+		Cursor c = queryForCursor(condition);
+		return mProxy.convertDatabaseToBean(c);
 	}
 
 	@Override
@@ -294,36 +315,8 @@ public abstract class SQLite3DAO<T> implements IDAO<T> {
 	}
 	
 	@Override
-	public Cursor query(String sql, String[] selectionArgs) {
-		Cursor c = null;
-		mReadLock.lock();
-		try {
-			c = mDatabase.rawQueryWithFactory(null, sql, selectionArgs, null,
-					null);
-		} catch (SQLiteException e) {
-			e.printStackTrace();
-		} finally {
-			mReadLock.unlock();
-		}
-		return c;
-	}
-	
-	@Override
-	public List<T> query(Condition condition) {
-		Cursor c = null;
-		mReadLock.lock();
-		try {
-			String sql = SQLiteQueryBuilder.buildQueryString(false, tableName,
-					null, condition.getSelection(), condition.getGroupby(),
-					null, condition.getOrderBy(), null);
-
-            c = mDatabase.rawQueryWithFactory(null, sql, condition.getSelectionArgs(),
-            		SQLiteDatabase.findEditTable(tableName), null);
-		} catch (SQLiteException e) {
-			e.printStackTrace();
-		} finally {
-			mReadLock.unlock();
-		}
+	public List<T> queryAll() {
+		Cursor c = queryAllForCursor();
 		return mProxy.convertDatabaseToBean(c);
 	}
 
@@ -339,20 +332,6 @@ public abstract class SQLite3DAO<T> implements IDAO<T> {
 			mReadLock.unlock();
 		}
 		return c;
-	}
-	
-	@Override
-	public List<T> queryAll() {
-		Cursor c = null;
-		mReadLock.lock();
-		try {
-			c = mDatabase.rawQueryWithFactory(null, mQueryAll, null, null, null);
-		} catch (SQLiteException e) {
-			e.printStackTrace();
-		} finally {
-			mReadLock.unlock();
-		}
-		return mProxy.convertDatabaseToBean(c);
 	}
 
 	@Override

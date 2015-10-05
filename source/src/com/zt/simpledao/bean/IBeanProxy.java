@@ -14,7 +14,7 @@ public interface IBeanProxy<T> {
 	
 	String getTableName();
 	
-	String getTableCreator();
+	String[] getTableCreator();
 	
 	Class<T> getBeanClass();
 	
