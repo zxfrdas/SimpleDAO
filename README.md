@@ -52,7 +52,7 @@
 - 打开Module的build.grade，文件开头加上依赖 apply plugin: 'android-apt'
 - 依赖中加入你要使用的带APT注解处理器的jar包：apt files(libs/SimpleDAO.jar)
 
-### 配置完毕开始使用 ###
+## 配置完毕开始使用 ##
 ```java
 // 假设已经写好了一个要映射为数据库的类并加上了正确注解
 // APT会自动生成两个文件TestBeanDAO和TestBeanProxy
