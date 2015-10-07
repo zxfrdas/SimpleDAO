@@ -1,9 +1,9 @@
 package com.simpledao.sample;
 
-import com.zt.simpledao.Column;
-import com.zt.simpledao.Database;
-import com.zt.simpledao.SQLDataType;
-import com.zt.simpledao.Table;
+import com.zt.simpledao.annotation.Column;
+import com.zt.simpledao.annotation.Column.SQLDataType;
+import com.zt.simpledao.annotation.Database;
+import com.zt.simpledao.annotation.Table;
 
 // 此处指定对应的数据库名称、表名、数据库版本
 @Database(name = "test.db", version = 1)

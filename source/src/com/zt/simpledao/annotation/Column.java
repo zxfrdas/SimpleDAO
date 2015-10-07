@@ -1,4 +1,4 @@
-package com.zt.simpledao;
+package com.zt.simpledao.annotation;
 
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
@@ -31,4 +31,12 @@ public @interface Column {
 	 * @return 是否为主键
 	 */
 	boolean primary() default false;
+	
+	public enum SQLDataType {
+		NULL,
+		INTEGER,
+		REAL,
+		TEXT,
+		BLOB;
+	}
 }

@@ -1,5 +1,7 @@
 package com.zt.simpledao.dao;
 
+import java.lang.ref.WeakReference;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
@@ -17,6 +19,8 @@ import android.database.sqlite.SQLiteException;
 import android.database.sqlite.SQLiteOpenHelper;
 import android.database.sqlite.SQLiteQueryBuilder;
 import android.database.sqlite.SQLiteStatement;
+import android.os.Handler;
+import android.os.Looper;
 
 import com.zt.simpledao.bean.IBeanProxy;
 import com.zt.simpledao.condition.Condition;
@@ -29,6 +33,8 @@ public abstract class SQLite3DAO<T> implements IDAO<T> {
 	private IBeanProxy<T> mProxy;
 	private String mQueryAll = "SELECT * FROM ";
 	private String mQueryCount = "SELECT COUNT(*) FROM ";
+	private List<WeakReference<IDaoObserver>> mObservers;
+	private Handler mUIHandler;
 
 	public SQLite3DAO(Context context, IBeanProxy<T> proxy) {
 		mProxy = proxy;
@@ -54,10 +60,16 @@ public abstract class SQLite3DAO<T> implements IDAO<T> {
 				}
 			}
 		}.getWritableDatabase();
+		mObservers = new ArrayList<WeakReference<IDaoObserver>>();
+		mUIHandler = new Handler(Looper.getMainLooper());
 	}
 
 	protected abstract void onCusUpgrade(SQLiteDatabase db, int oldVersion,
 			int newVersion);
+	
+	public void registObserver(IDaoObserver observer) {
+		mObservers.add(new WeakReference<IDaoObserver>(observer));
+	}
 	
 	@Override
 	public boolean insert(T item) {
@@ -73,6 +85,7 @@ public abstract class SQLite3DAO<T> implements IDAO<T> {
 		}
 		mWriteLock.unlock();
 		if (-1 != ret) {
+			notifyObservers();
 			return true;
 		}
 		return false;
@@ -101,6 +114,7 @@ public abstract class SQLite3DAO<T> implements IDAO<T> {
 			mWriteLock.unlock();
 		}
 		if (-1 != ret) {
+			notifyObservers();
 			return true;
 		}
 		return false;
@@ -124,6 +138,7 @@ public abstract class SQLite3DAO<T> implements IDAO<T> {
 			mWriteLock.unlock();
 		}
 		if (-1 != ret) {
+			notifyObservers();
 			return true;
 		}
 		return false;
@@ -144,6 +159,7 @@ public abstract class SQLite3DAO<T> implements IDAO<T> {
 		}
 		mWriteLock.unlock();
 		if (0 != ret) {
+			notifyObservers();
 			return true;
 		}
 		return false;
@@ -172,6 +188,7 @@ public abstract class SQLite3DAO<T> implements IDAO<T> {
 			mWriteLock.unlock();
 		}
 		if (0 != ret) {
+			notifyObservers();
 			return true;
 		}
 		return false;
@@ -191,6 +208,7 @@ public abstract class SQLite3DAO<T> implements IDAO<T> {
 			mWriteLock.unlock();
 		}
 		if (0 != ret) {
+			notifyObservers();
 			return true;
 		}
 		return false;
@@ -211,6 +229,7 @@ public abstract class SQLite3DAO<T> implements IDAO<T> {
 		}
 		mWriteLock.unlock();
 		if (0 != ret) {
+			notifyObservers();
 			return true;
 		}
 		return false;
@@ -239,6 +258,7 @@ public abstract class SQLite3DAO<T> implements IDAO<T> {
 			mWriteLock.unlock();
 		}
 		if (0 != ret) {
+			notifyObservers();
 			return true;
 		}
 		return false;
@@ -269,9 +289,29 @@ public abstract class SQLite3DAO<T> implements IDAO<T> {
 			mWriteLock.unlock();
 		}
 		if (0 != ret) {
+			notifyObservers();
 			return true;
 		}
 		return false;
+	}
+	
+	private void notifyObservers() {
+		List<WeakReference<IDaoObserver>> invalidRefs = new ArrayList<WeakReference<IDaoObserver>>();
+		for (WeakReference<IDaoObserver> observerRef : mObservers) {
+			if (null == observerRef || null == observerRef.get()) {
+				invalidRefs.add(observerRef);
+			} else {
+				final IDaoObserver observer = observerRef.get();
+				mUIHandler.post(new Runnable() {
+					
+					@Override
+					public void run() {
+						observer.onChange(SQLite3DAO.this);
+					}
+				});
+			}
+		}
+		mObservers.removeAll(invalidRefs);
 	}
 	
 	@Override

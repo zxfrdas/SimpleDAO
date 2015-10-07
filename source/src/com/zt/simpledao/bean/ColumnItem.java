@@ -2,7 +2,7 @@ package com.zt.simpledao.bean;
 
 import javax.lang.model.type.TypeKind;
 
-import com.zt.simpledao.SQLDataType;
+import com.zt.simpledao.annotation.Column.SQLDataType;
 
 public class ColumnItem {
 	/**

@@ -24,10 +24,10 @@ import javax.lang.model.util.ElementFilter;
 import javax.tools.Diagnostic.Kind;
 import javax.tools.JavaFileObject;
 
-import com.zt.simpledao.Column;
-import com.zt.simpledao.Database;
-import com.zt.simpledao.SQLDataType;
-import com.zt.simpledao.Table;
+import com.zt.simpledao.annotation.Column;
+import com.zt.simpledao.annotation.Column.SQLDataType;
+import com.zt.simpledao.annotation.Database;
+import com.zt.simpledao.annotation.Table;
 import com.zt.simpledao.bean.ColumnItem;
 import com.zt.simpledao.bean.PropMethodItem;
 
@@ -49,9 +49,9 @@ public class DAOProcessor extends AbstractProcessor {
 	@Override
 	public Set<String> getSupportedAnnotationTypes() {
 		Set<String> annotataions = new LinkedHashSet<String>();
-        annotataions.add("com.zt.simpledao.Column");
-        annotataions.add("com.zt.simpledao.Database");
-        annotataions.add("com.zt.simpledao.Table");
+        annotataions.add(Column.class.getName());
+        annotataions.add(Database.class.getName());
+        annotataions.add(Table.class.getName());
         return annotataions;
 	}
 
@@ -71,7 +71,7 @@ public class DAOProcessor extends AbstractProcessor {
 			// init database file path
 			String packageName = dbfile.toString().substring(0,
 					dbfile.toString().lastIndexOf("."));
-			String autoAPTPackageName = packageName + ".auto";
+			String autoAPTPackageName = packageName;
 			String proxyClassName = dbfile.getSimpleName() + "Proxy";
 			// create file
 			createBeanProxy(autoAPTPackageName, proxyClassName, dbfile);

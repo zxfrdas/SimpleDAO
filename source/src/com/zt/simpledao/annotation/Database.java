@@ -1,4 +1,4 @@
-package com.zt.simpledao;
+package com.zt.simpledao.annotation;
 
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
