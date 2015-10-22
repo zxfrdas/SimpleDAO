@@ -4,6 +4,7 @@ import java.lang.ref.WeakReference;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -26,6 +27,10 @@ public class Dao implements IDaoWrapper {
 			mContextRef = new WeakReference<Context>(context);
 		}
 		return InstanceHolder.sInstance;
+	}
+	
+	private Dao() {
+		daoMap = new HashMap<Class<?>, IDAO<?>>();
 	}
 	
 	public <T> void registObserver(IDaoObserver observer, Class<T> bean) {
