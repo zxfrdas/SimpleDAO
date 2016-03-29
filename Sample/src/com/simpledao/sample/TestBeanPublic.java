@@ -25,6 +25,8 @@ public class TestBeanPublic {
 	@Column(type=SQLDataType.TEXT)
 	public boolean booltext;
 	
+	public boolean test;
+	
 	// 必须有一个无参数的构造函数
 	public TestBeanPublic() {
 	}

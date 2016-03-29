@@ -114,6 +114,10 @@ public class DAOProcessor extends AbstractProcessor {
 				.getEnclosedElements());
 		for (VariableElement fieldElement : variables) {
 			Column c = fieldElement.getAnnotation(Column.class);
+			if (null == c) {
+				// This Field No Need Bind With Database
+				continue;
+			}
 			ColumnItem column = new ColumnItem();
 			// 用户自定义了一个列index，那么所有列都需要自定义
 			if (-1 != c.index()) {

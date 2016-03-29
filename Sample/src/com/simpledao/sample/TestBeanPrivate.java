@@ -25,6 +25,8 @@ public class TestBeanPrivate {
 	@Column(type=SQLDataType.TEXT)
 	private boolean booltext;
 	
+	private boolean test;
+	
 	// 必须有一个无参数的构造函数
 	public TestBeanPrivate() {
 	}
@@ -76,6 +78,14 @@ public class TestBeanPrivate {
 
 	public void setBooltext(boolean booltext) {
 		this.booltext = booltext;
+	}
+
+	public boolean isTest() {
+		return test;
+	}
+
+	public void setTest(boolean test) {
+		this.test = test;
 	}
 	
 }
